@@ -1,24 +1,45 @@
 # Jork Powers
 
-Optional powers for Jork. Each power extends what she can do.
+Optional powers for [Jork](https://github.com/hirodefi/Jork). Each power extends what she can do.
 
-Install by cloning into your Jork workspace powers folder:
+Jork's core stays minimal. Powers are how she grows.
+
+## Install
 
 ```bash
 git clone https://github.com/hirodefi/Jork-Powers /path/to/your/Jork/workspace/powers
 ```
 
-Jork reads `powers/INDEX.md` to discover what is available.
+Jork reads `powers/INDEX.md` at each think cycle to discover what is available.
 
-## Available powers
+## Available Powers
 
-| Power | Script | What it does |
-|-------|--------|--------------|
-| web-search | web-search.sh | Search the web via DuckDuckGo |
-| web-fetch | web-fetch.sh | Fetch and read a URL |
-| search-memory | search-memory.sh | Search journal and history |
+| Power | Type | What it does |
+|-------|------|--------------|
+| web-search | bash | Search the web via DuckDuckGo |
+| web-fetch | bash | Fetch and read any URL |
+| search-memory | bash | Search Jork's journal and history |
+| solana | node | Wallet creation, SOL transfers, token swaps via Jupiter |
+| voice | python | Transcribe voice notes, generate speech, custom voices |
+| private-ip | python | Tor IP rotation for anonymous requests |
+| x-search | python | Search X/Twitter without API or captcha |
+| reddit | python | Search and read Reddit without API key |
+| news | python | Real-time news monitor from RSS feeds |
+| graphics | python | Read images and generate graphics |
 
-## Adding your own
+## Structure
 
-Drop a script in this folder and add a row to INDEX.md.
-Jork will discover it next time she reads the index.
+Each power follows a standard format (see STRUCTURE.md):
+
+```
+power-name/
+  README.md      - Description and usage
+  CONFIG.json    - Default configuration
+  index.js /.py  - Main entry point
+```
+
+## Adding Your Own
+
+1. Create a folder with README.md, config.json, index file
+2. Add a row to INDEX.md
+3. Jork discovers it automatically
