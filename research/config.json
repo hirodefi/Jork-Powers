@@ -1,0 +1,20 @@
+{
+  "name": "research",
+  "version": "1.0.0",
+  "description": "Research anything - web search, URL fetch, academic papers, GitHub, HackerNews. No API keys required.",
+  "requires": ["requests", "beautifulsoup4"],
+  "optional": {
+    "scrapling[fetchers]": "Stealth fetching - bypasses Cloudflare and anti-bot",
+    "scrapling[all]": "Dynamic fetching - full Playwright browser for JS-heavy sites",
+    "BRAVE_API_KEY": "Brave Search API - best quality results, 2000 free/month at api.search.brave.com",
+    "GITHUB_TOKEN": "GitHub API - 5000 req/hr vs 60 unauthenticated"
+  },
+  "brave_api_key": "",
+  "github_token": "",
+  "defaults": {
+    "fetch_mode": "auto",
+    "max_results": 10,
+    "max_chars": 6000,
+    "deep_pages": 3
+  }
+}

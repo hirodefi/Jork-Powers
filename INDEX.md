@@ -13,6 +13,7 @@
 | news | python | Real-time news monitor from RSS feeds |
 | graphics | python | Read images and generate graphics |
 | earn | python | Make money: ClawTasks bounties, Reddit pain mining, digital products |
+| research | python | Find data on anything: web search, URL fetch (anti-bot), academic, GitHub, HN |
 
 ## Usage
 
@@ -26,6 +27,7 @@ python3 powers/reddit/index.py search "claude ai"
 python3 powers/news/index.py fetch crypto
 python3 powers/graphics/index.py read screenshot.png
 python3 powers/earn/index.py overview
+python3 powers/research/index.py deep "query" 3
 ```
 
 ## Adding a power
