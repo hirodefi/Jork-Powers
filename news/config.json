@@ -1,0 +1,15 @@
+{
+  "name": "news",
+  "version": "1.0.0",
+  "description": "Real-time news monitor on any topic",
+  "requires": [
+    "requests",
+    "feedparser"
+  ],
+  "interval": 120,
+  "sources": [
+    "rss",
+    "reddit",
+    "web"
+  ]
+}

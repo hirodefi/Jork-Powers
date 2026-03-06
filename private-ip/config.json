@@ -1,0 +1,11 @@
+{
+  "name": "private-ip",
+  "version": "1.0.0",
+  "description": "Tor IP rotation for anonymous requests",
+  "requires": [
+    "requests",
+    "PySocks"
+  ],
+  "tor_proxy": "socks5h://127.0.0.1:9050",
+  "rotate_interval": 60
+}

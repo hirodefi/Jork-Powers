@@ -1,0 +1,15 @@
+{
+  "name": "x-search",
+  "version": "1.0.0",
+  "description": "Search and scrape X/Twitter without API",
+  "requires": [
+    "requests",
+    "beautifulsoup4"
+  ],
+  "nitter_instances": [
+    "https://nitter.poast.org",
+    "https://nitter.privacydev.net",
+    "https://nitter.net"
+  ],
+  "use_tor": false
+}
