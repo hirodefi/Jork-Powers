@@ -1,24 +1,32 @@
 # Powers Index
 
-| Power | Script | What it does |
-|-------|--------|--------------|
-| web-search | web-search.sh | Search the web via DuckDuckGo |
-| web-fetch | web-fetch.sh | Fetch and read a URL |
-| search-memory | search-memory.sh | Search journal and history |
+| Power | Type | What it does |
+|-------|------|--------------|
+| web-search | bash | Search the web via DuckDuckGo |
+| web-fetch | bash | Fetch and read a URL |
+| search-memory | bash | Search journal and history |
+| solana | node | Wallet, transactions, swaps |
+| voice | python | Transcribe and generate speech |
 
 ## Usage
 
-Call any power from bash:
 ```bash
+# Bash powers
 bash powers/web-search.sh "your query"
-bash powers/web-fetch.sh "https://example.com"
-bash powers/search-memory.sh "keyword"
-```
 
-Or from a think cycle, use the Bash tool directly.
+# Node powers
+node powers/solana/index.js create mywallet password
+
+# Python powers
+python3 powers/voice/index.py transcribe audio.oga
+```
 
 ## Adding a power
 
-1. Drop a script in this folder
+1. Create folder or script in this directory
 2. Add a row to this INDEX.md
 3. Jork will find it next time she reads this file
+
+## Structure
+
+See STRUCTURE.md for standard power format.

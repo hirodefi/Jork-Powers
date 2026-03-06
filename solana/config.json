@@ -1,0 +1,14 @@
+{
+  "name": "solana",
+  "version": "1.0.0",
+  "description": "Solana wallet, transactions, and swaps",
+  "requires": [
+    "@solana/web3.js",
+    "@solana/spl-token"
+  ],
+  "rpc": {
+    "default": "https://api.mainnet-beta.solana.com",
+    "helius": "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY",
+    "alchemy": "https://solana-mainnet.g.alchemy.com/v2/YOUR_KEY"
+  }
+}
