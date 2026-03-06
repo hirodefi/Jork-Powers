@@ -123,13 +123,63 @@ async function run(args) {
 }
 
 function help() {
-    return 'Solana Power\n' +
-        'Commands:\n' +
-        '  create <name> <password> - Create new wallet\n' +
-        '  list - List wallets\n' +
-        '  balance <address> [rpc] - Get SOL balance\n' +
-        '  send <wallet> <password> <to> <amount> [rpc] - Send SOL\n' +
-        '  swap <wallet> <password> <inputMint> <outputMint> <amount> [rpc] - Swap tokens';
+    return `Solana Power
+Commands:
+  create <name> <password> - Create new encrypted wallet
+  list                     - List all saved wallets
+  balance <address> [rpc]  - Get SOL balance
+  send <name> <password> <to> <amount> [rpc] - Send SOL
+  swap <name> <password> <inputMint> <outputMint> <amount> [rpc] - Swap tokens
+
+--- HOW TO CREATE AND MANAGE WALLETS ---
+
+1. Create a wallet:
+   node index.js create main-wallet my-strong-password
+   -> generates a new Solana keypair
+   -> encrypts secret key with AES-256 using your password
+   -> saves to powers/solana/wallets/main-wallet.json
+   -> returns public key (safe to share/store anywhere)
+
+2. Where wallets are saved:
+   powers/solana/wallets/<name>.json
+   - file contains: { salt, iv, data } (AES-256-CBC encrypted)
+   - the secret key is NEVER stored in plaintext
+   - the file is safe to back up - useless without the password
+
+3. Naming convention (use clear names):
+   main-wallet    - primary wallet for transactions
+   treasury       - holds main funds, rarely used directly
+   trading-wallet - active trading wallet
+   earn-wallet    - receives ClawTasks/bounty payments
+
+4. How to securely record wallet info:
+   After creating, save this to .jork/LEDGER.md:
+   - wallet name
+   - public key
+   - purpose
+   - password hint (NOT the password itself - a clue only you understand)
+   - date created
+
+   Example LEDGER.md entry:
+   ## Wallets
+   | Name | Public Key | Purpose | Created |
+   |------|-----------|---------|---------|
+   | main-wallet | ABC123... | primary | 2026-03-06 |
+
+5. Password rules:
+   - Use a strong unique password per wallet
+   - Store password hints (not passwords) in LEDGER.md or SNAPSHOT.md
+   - Never log or print the password anywhere
+   - If you forget the password the wallet is unrecoverable - save hints
+
+6. Backup:
+   - Copy the wallets/ folder to a safe location
+   - The encrypted .json files are safe to copy - no plaintext keys inside
+   - Keep the password separately (not in the same place as the file)
+
+7. Check your wallets anytime:
+   node index.js list
+   node index.js balance <public-key>`;
 }
 
 module.exports = { run, help, createWallet, loadWallet, listWallets, getBalance, sendSol, swap };
