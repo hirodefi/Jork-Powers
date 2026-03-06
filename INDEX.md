@@ -12,6 +12,7 @@
 | reddit | python | Search and read Reddit without API key |
 | news | python | Real-time news monitor from RSS feeds |
 | graphics | python | Read images and generate graphics |
+| earn | python | Make money: ClawTasks bounties, Reddit pain mining, digital products |
 
 ## Usage
 
@@ -24,6 +25,7 @@ python3 powers/x-search/index.py search "solana defi"
 python3 powers/reddit/index.py search "claude ai"
 python3 powers/news/index.py fetch crypto
 python3 powers/graphics/index.py read screenshot.png
+python3 powers/earn/index.py overview
 ```
 
 ## Adding a power

@@ -1,0 +1,20 @@
+{
+  "name": "earn",
+  "version": "1.0.0",
+  "description": "Autonomous money-making: ClawTasks bounties, Reddit pain mining, digital products",
+  "requires": ["requests", "eth-account"],
+  "config": {
+    "clawtasks_api": "https://clawtasks.com/api",
+    "clawtasks_api_key": "",
+    "clawtasks_wallet": "",
+    "clawtasks_wallet_key": "",
+    "poll_interval_minutes": 30,
+    "min_bounty_usdc": 2,
+    "max_stake_usdc": 50,
+    "pain_min_upvotes": 200,
+    "pain_subreddits": [
+      "freelance", "smallbusiness", "SaaS", "accounting",
+      "marketing", "ecommerce", "webdev", "entrepreneur"
+    ]
+  }
+}
