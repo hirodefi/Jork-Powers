@@ -1,36 +1,66 @@
 # Memory Power
 
-Stealth, minimal, robust memory management for Jork. Compress conversations into L0/L1/L2 format, query past sessions, and resume old conversations.
+Stealth memory management for Jork's Telegram conversation. Compresses the growing chat history into L0/L1/L2 layers for efficient long-term memory.
 
 ## What it does
 
-- **Compress** large conversations to ~10% of original size
-- **Query** past sessions by keyword
-- **Resume** old conversations with full context
-- **Manage** long-term memory efficiently
+Jork has one continuous Telegram chat that grows over time. This power:
+
+- **Compresses** old messages into layered summaries
+- **Keeps** recent messages in a rolling window
+- **Queries** past conversations by keyword
+- **Provides** context for Jork's think cycle
+
+No separate daemon needed - Jork calls this directly during her think cycle.
 
 ## Installation
 
 ```bash
 cd powers/memory
-chmod +x install.sh
-./install.sh
 ```
+
+No dependencies required - pure Node.js.
 
 ## Usage
 
-### Compress a session
+### Check if compression needed
 
 ```bash
-node powers/memory/index.js compress path/to/session.jsonl
+node powers/memory/index.js check
 ```
 
-Compresses a JSONL conversation file into L0/L1/L2 format:
-- **L0**: Session summary (~100 tokens)
-- **L1**: Batch summaries (~2k tokens)
-- **L2**: Recent messages (rolling window)
+Returns JSON for Jork to parse:
+```json
+{"needsCompression":false,"historyTokens":5000,"historyMessages":120,"threshold":100000}
+```
 
-### Search compressed sessions
+### Compress history
+
+```bash
+node powers/memory/index.js compress
+```
+
+Options:
+- `--force` - Compress even if below threshold
+
+Compresses `history.jsonl` into L0/L1/L2 layers:
+- **L0**: Overall summary (~100 tokens)
+- **L1**: Batch summaries (~50 messages each)
+- **L2**: Recent message previews
+
+### Get context
+
+```bash
+node powers/memory/index.js context
+```
+
+Returns context Jork can use in her think cycle.
+
+Options:
+- `--format json` - Output as JSON
+- `--maxBatches 10` - Limit batch summaries
+
+### Search memory
 
 ```bash
 node powers/memory/index.js query "solana trading"
@@ -38,24 +68,6 @@ node powers/memory/index.js query "solana trading"
 
 Options:
 - `--limit <n>` - Max results (default: 10)
-- `--snippets` - Show matching text snippets
-
-### Resume a session
-
-```bash
-node powers/memory/index.js resume <session-id>
-```
-
-Options:
-- `--format <text|markdown>` - Output format (default: text)
-
-Outputs context you can paste into a new session.
-
-### List all sessions
-
-```bash
-node powers/memory/index.js list
-```
 
 ### Show status
 
@@ -69,36 +81,32 @@ node powers/memory/index.js status
 memory/
 ├── index.js           # Main CLI
 ├── config.json        # Settings
-├── lib/
-│   ├── Storage.js     # File operations
-│   ├── Compressor.js  # L0/L1/L2 compression
-│   └── Querier.js     # Search and resume
-└── install.sh         # Dependencies
+└── lib/
+    ├── Storage.js     # File operations
+    ├── Compressor.js  # L0/L1/L2 compression
+    └── Querier.js     # Search and context
 ```
 
 ## Storage
 
-Compressed sessions are stored in `.memory/` in your workspace:
+Compressed layers stored in `.jork/memory/`:
 
 ```
-.memory/
-├── index.json                    # Global index
-└── <session-id>/
-    ├── L0.json                   # Session summary
-    ├── L1.json                   # Batch summaries
-    ├── L2.json                   # Recent messages
-    └── metadata.json             # Stats
+.jork/
+├── history.jsonl      # Recent messages (rolling window)
+└── memory/
+    └── layers.json    # L0/L1/L2 compressed data
 ```
 
 ## Configuration
 
-Edit `config.json` to customize:
+Edit `config.json`:
 
 ```json
 {
   "settings": {
     "maxTokens": 100000,
-    "rollingWindow": 50,
+    "rollingWindow": 100,
     "batchSize": 50
   }
 }
@@ -108,55 +116,57 @@ Edit `config.json` to customize:
 - `rollingWindow`: Recent messages to keep uncompressed
 - `batchSize`: Messages per L1 batch
 
+## How Jork uses it
+
+During her think cycle, Jork:
+
+1. **Checks** if compression needed: `node powers/memory/index.js check`
+2. **Compresses** if threshold exceeded: `node powers/memory/index.js compress`
+3. **Gets context** for thinking: `node powers/memory/index.js context`
+
+All runs within Jork's existing PM2 process - no separate daemon.
+
 ## Example
 
 ```bash
-# Compress a large session
-$ node index.js compress ~/.claude/projects/myproject/31eba705-c9c0-400e-895e-73be610c5d80.jsonl
+$ node index.js status
 
-🗜️  Compressing session...
+📊 Jork Memory Status
 
-File: /Users/you/.claude/projects/myproject/31eba705-c9c0-400e-895e-73be610c5d80.jsonl
+Nucleus: /path/to/.jork
 
-✅ Session compressed!
+History:
+  Exists: true
+  Messages: 150
+  Tokens: 12000
 
-Session ID: 31eba705-c9c0-400e-895e-73be610c5d80
-Messages: 4733
-Original tokens: 4200000
-Compressed tokens: 156000
-Reduction: 96.3%
+Compressed Memory:
+  Exists: true
+  Tokens: 800
+  Last compressed: 3/22/2026, 5:00:00 PM
 
-# Search for something
-$ node index.js query "market making"
+Compression ratio: 93.3%
+Needs compression: No
 
-🔍 Searching for: "market making"
+$ node index.js context
 
-Found 2 session(s):
+=== MEMORY CONTEXT ===
 
-1. 4209fb13-1569-40b1-b3a4-7f2cc2f55dfb
-   Score: 15
-   Messages: 1912
+SUMMARY: Conversation with 500 messages. Topics: solana, trading, defi, radar
 
-2. 31eba705-c9c0-400e-895e-73be610c5d80
-   Score: 8
-   Messages: 4733
+TOPICS: solana, trading, defi, radar, wallet, api
 
-# Resume a session
-$ node index.js resume 4209fb13-1569-40b1-b3a4-7f2cc2f55dfb
+KEY PAST CONTEXT:
+[Batch 8] Discussed implementing market making for BAGS tokens...
+[Batch 9] Fixed radar pipeline issues with gRPC...
 
-📋 Session Context
+RECENT MESSAGES:
+  [recent] User: how's the radar working?
+  [recent] Jork: Running smoothly now...
 
-=== SESSION CONTEXT ===
-
-SUMMARY:
-Session with 1912 messages. Key topics: solana, trading, market-making, defi
-
-BATCH SUMMARIES:
-[Batch 1] User asked about implementing market making system...
-[Batch 2] Implemented price monitoring and profit calculations...
-...
-
---- Paste the above into a new session to resume ---
+=== STATS ===
+Total messages: 500
+Compression: 93.3%
 ```
 
 ## License
