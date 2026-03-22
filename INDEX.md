@@ -5,6 +5,7 @@
 | web-search | bash | Search the web via DuckDuckGo |
 | web-fetch | bash | Fetch and read a URL |
 | search-memory | bash | Search journal and history |
+| memory | node | Stealth memory management - compress, query, resume conversations |
 | solana | node | Wallet, transactions, swaps |
 | voice | python | Transcribe and generate speech |
 | private-ip | python | Tor IP rotation for anonymous requests |
@@ -19,6 +20,10 @@
 
 ```bash
 bash powers/web-search.sh "query"
+node powers/memory/index.js status
+node powers/memory/index.js compress
+node powers/memory/index.js context
+node powers/memory/index.js query "search term"
 node powers/solana/index.js create mywallet password
 python3 powers/voice/index.py transcribe audio.oga
 python3 powers/private-ip/index.py rotate

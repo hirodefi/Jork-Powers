@@ -1,0 +1,12 @@
+{
+  "name": "memory",
+  "version": "1.0.0",
+  "description": "Stealth memory management for Jork - compress, query, and resume conversations",
+  "requires": [],
+  "settings": {
+    "maxTokens": 100000,
+    "rollingWindow": 50,
+    "batchSize": 50,
+    "compressionRatio": 0.1
+  }
+}
