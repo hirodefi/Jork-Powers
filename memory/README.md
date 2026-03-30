@@ -1,17 +1,33 @@
 # Memory Power
 
-Stealth memory management for Jork's Telegram conversation. Compresses the growing chat history into L0/L1/L2 layers for efficient long-term memory.
+Zero-loss memory for Jork's Telegram conversation. Every message ever written is preserved. Retrieval is O(1) via binary offset index — no scanning, no compression, no data loss.
 
 ## What it does
 
-Jork has one continuous Telegram chat that grows over time. This power:
+- **Preserves** every message forever in an append-only log
+- **Indexes** keywords and concepts at write-time — lookup only at read-time
+- **Provides** instant context for Jork's think cycle: summary + recent + relevant
+- **Searches** past conversations by keyword with no file scanning
 
-- **Compresses** old messages into layered summaries
-- **Keeps** recent messages in a rolling window
-- **Queries** past conversations by keyword
-- **Provides** context for Jork's think cycle
+No separate daemon. No dependencies. Pure Node.js.
 
-No separate daemon needed - Jork calls this directly during her think cycle.
+## How it works
+
+```
+.jork/
+├── history.jsonl         ← every message ever. append-only. never touched.
+└── memory/
+    ├── offsets.bin       ← 12 bytes per message. binary. zero-parse O(1) seek.
+    ├── keywords.json     ← word → [message ids]
+    ├── concepts.json     ← concept → [message ids]
+    ├── wal.json          ← write-ahead log (recent mutations, flushed periodically)
+    └── summary.md        ← 3-5 lines. Jork rewrites herself.
+```
+
+**Core law: all intelligence at write-time. Only lookup at read-time.**
+
+Every new message: extract keywords + classify concept + append offset → done.
+Every think cycle: seek 20 recent + seek relevant by concept → context in <5ms.
 
 ## Installation
 
@@ -19,84 +35,89 @@ No separate daemon needed - Jork calls this directly during her think cycle.
 cd powers/memory
 ```
 
-No dependencies required - pure Node.js.
+No dependencies. Pure Node.js.
 
 ## Usage
 
-### Check if compression needed
-
-```bash
-node powers/memory/index.js check
-```
-
-Returns JSON for Jork to parse:
-```json
-{"needsCompression":false,"historyTokens":5000,"historyMessages":120,"threshold":100000}
-```
-
-### Compress history
-
-```bash
-node powers/memory/index.js compress
-```
-
-Options:
-- `--force` - Compress even if below threshold
-
-Compresses `history.jsonl` into L0/L1/L2 layers:
-- **L0**: Overall summary (~100 tokens)
-- **L1**: Batch summaries (~50 messages each)
-- **L2**: Recent message previews
-
-### Get context
+### Get think-cycle context
 
 ```bash
 node powers/memory/index.js context
 ```
 
-Returns context Jork can use in her think cycle.
+Returns:
+```
+=== MEMORY CONTEXT ===
 
-Options:
-- `--format json` - Output as JSON
-- `--maxBatches 10` - Limit batch summaries
+SUMMARY:
+Building in Solana domain. Radar live on gRPC. Market making BAGS tokens.
+Active goals: radar v2, memory power, grow treasury.
+
+RECENT:
+[1001] user: how's the radar working?
+[1002] jork: Running smoothly, gRPC stream stable.
+
+RELEVANT:
+[radar] [988] jork: switched to gRPC after REST kept dropping
+[goals] [889] jork: I want radar v2 out this week
+
+=== END ===
+```
 
 ### Search memory
 
 ```bash
-node powers/memory/index.js query "solana trading"
+node powers/memory/index.js query "gRPC pipeline"
 ```
 
 Options:
-- `--limit <n>` - Max results (default: 10)
+- `--limit <n>` — max results (default: 10)
 
-### Show status
+### Append a message
+
+```bash
+node powers/memory/index.js append --role user --msg "how's the radar?"
+node powers/memory/index.js append --role jork  --msg "Running fine."
+```
+
+### Status
 
 ```bash
 node powers/memory/index.js status
 ```
 
-## Architecture
+### Quick stats (JSON)
 
-```
-memory/
-├── index.js           # Main CLI
-├── config.json        # Settings
-└── lib/
-    ├── Storage.js     # File operations
-    ├── Compressor.js  # L0/L1/L2 compression
-    └── Querier.js     # Search and context
+```bash
+node powers/memory/index.js check
 ```
 
-## Storage
+### Rebuild index (recovery / migration)
 
-Compressed layers stored in `.jork/memory/`:
+```bash
+node powers/memory/index.js rebuild
+```
 
+Scans `history.jsonl` once and rebuilds all index files. Run this once when migrating from the old memory power, or after any crash.
+
+## Jork integration
+
+```js
+const memory = require('./powers/memory');
+
+// Every think cycle
+const memCtx = memory.context();
+const prompt = memCtx + '\n\n' + buildThinkPrompt(state);
+
+// Every message in/out
+memory.append('user', msg.text);
+memory.append('jork', response);
+
+// On shutdown
+memory.close();
 ```
-.jork/
-├── history.jsonl      # Recent messages (rolling window)
-└── memory/
-    └── layers.json    # L0/L1/L2 compressed data
-```
+
+No process spawning. Module is loaded once, index stays in RAM.
 
 ## Configuration
 
@@ -105,69 +126,42 @@ Edit `config.json`:
 ```json
 {
   "settings": {
-    "maxTokens": 100000,
-    "rollingWindow": 100,
-    "batchSize": 50
+    "recentWindow": 20,
+    "contextConceptDepth": 5,
+    "flushEvery": 5,
+    "compactEvery": 1000
   }
 }
 ```
 
-- `maxTokens`: Auto-compress threshold
-- `rollingWindow`: Recent messages to keep uncompressed
-- `batchSize`: Messages per L1 batch
+- `recentWindow` — how many recent messages to include in context
+- `contextConceptDepth` — how many relevant messages per concept
+- `flushEvery` — flush WAL to disk every N messages
+- `compactEvery` — compact WAL into main index every N messages
 
-## How Jork uses it
+## Adding concepts
 
-During her think cycle, Jork:
+Edit `lib/Concepts.js` to add domain-specific patterns:
 
-1. **Checks** if compression needed: `node powers/memory/index.js check`
-2. **Compresses** if threshold exceeded: `node powers/memory/index.js compress`
-3. **Gets context** for thinking: `node powers/memory/index.js context`
-
-All runs within Jork's existing PM2 process - no separate daemon.
-
-## Example
-
-```bash
-$ node index.js status
-
-📊 Jork Memory Status
-
-Nucleus: /path/to/.jork
-
-History:
-  Exists: true
-  Messages: 150
-  Tokens: 12000
-
-Compressed Memory:
-  Exists: true
-  Tokens: 800
-  Last compressed: 3/22/2026, 5:00:00 PM
-
-Compression ratio: 93.3%
-Needs compression: No
-
-$ node index.js context
-
-=== MEMORY CONTEXT ===
-
-SUMMARY: Conversation with 500 messages. Topics: solana, trading, defi, radar
-
-TOPICS: solana, trading, defi, radar, wallet, api
-
-KEY PAST CONTEXT:
-[Batch 8] Discussed implementing market making for BAGS tokens...
-[Batch 9] Fixed radar pipeline issues with gRPC...
-
-RECENT MESSAGES:
-  [recent] User: how's the radar working?
-  [recent] Jork: Running smoothly now...
-
-=== STATS ===
-Total messages: 500
-Compression: 93.3%
+```js
+const CONCEPTS = {
+  radar:         /radar|grpc|pipeline|stream/i,
+  market_making: /market.mak|spread|liquidity/i,
+  // add yours here
+};
 ```
+
+Concepts are classified at write-time. Zero cost at read-time.
+
+## Scale
+
+| History     | offsets.bin | keywords.json | RAM usage | Context time |
+|-------------|-------------|---------------|-----------|--------------|
+| 1,000 msgs  | 12 KB       | ~150 KB       | <1 MB     | <2ms         |
+| 10,000 msgs | 120 KB      | ~1.5 MB       | ~3 MB     | <3ms         |
+| 100,000 msgs| 1.2 MB      | ~15 MB        | ~20 MB    | <5ms         |
+
+At 300 messages/day, 100k messages ≈ 1 year of operation.
 
 ## License
 

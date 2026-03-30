@@ -1,12 +1,26 @@
 {
   "name": "memory",
-  "version": "1.0.0",
-  "description": "Stealth memory management for Jork - compress, query, and resume conversations",
+  "version": "2.0.0",
+  "description": "Zero-loss memory for Jork — append-only log, binary offset index, concept routing",
   "requires": [],
   "settings": {
-    "maxTokens": 100000,
-    "rollingWindow": 50,
-    "batchSize": 50,
-    "compressionRatio": 0.1
+    "recentWindow": 20,
+    "contextConceptDepth": 5,
+    "flushEvery": 5,
+    "compactEvery": 1000,
+    "walFlushInterval": 30000,
+    "summaryMaxAge": 172800
+  },
+  "concepts": {
+    "radar":         "radar|grpc|pipeline|stream|websocket|monitor|feed",
+    "market_making": "market.mak|mm\\b|spread|liquidity|depth|order.book",
+    "token_ops":     "launch|mint|deploy|pump|snipe|token|ca\\b|contract",
+    "wallet_ops":    "wallet|keypair|sign|transfer|balance|lamport",
+    "trading":       "trade|swap|buy|sell|entry|exit|pnl|profit|loss",
+    "goals":         "goal|plan|want to|going to|intend|focus|next step",
+    "issues":        "bug|fix|error|broke|fail|crash|wrong|problem",
+    "people":        "told me|he said|she said|team|partner|user|investor",
+    "identity":      "i am|i feel|my purpose|i think about myself",
+    "treasury":      "treasury|fund|budget|cost|revenue|earn|income"
   }
 }
