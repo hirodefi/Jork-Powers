@@ -16,6 +16,7 @@ Jork reads `powers/INDEX.md` at each think cycle to discover what is available.
 
 | Power | Type | What it does |
 |-------|------|--------------|
+| memory | node | Permanent zero-loss memory - installed by default |
 | web-search | bash | Search the web via DuckDuckGo |
 | web-fetch | bash | Fetch and read any URL |
 | search-memory | bash | Search Jork's journal and history |
@@ -26,6 +27,16 @@ Jork reads `powers/INDEX.md` at each think cycle to discover what is available.
 | reddit | python | Search and read Reddit without API key |
 | news | python | Real-time news monitor from RSS feeds |
 | graphics | python | Read images and generate graphics |
+
+## Memory
+
+Memory is the one power that ships with every Jork install. Setup installs it automatically - you never have to think about it.
+
+It gives Jork permanent, zero-loss recall of every conversation she has ever had. Every message is written to an append-only log and indexed by keyword and concept at the moment it arrives - no compression, no summarisation, nothing thrown away. When she thinks, she gets her recent messages plus anything relevant from her full history in under 5ms, regardless of how long she has been running.
+
+The older she gets, the more she knows. Memory never slows her down.
+
+See [memory/README.md](memory/README.md) for full details.
 
 ## Structure
 

@@ -153,8 +153,9 @@ class Store {
             this.offsets.push({ offset: BigInt(offset), len });
 
             // keywords + concepts
-            const kw = extractKeywords(msg.msg || '');
-            const c  = classifyConcepts(msg.msg || '');
+            const text = msg.msg || msg.content || '';
+            const kw = extractKeywords(text);
+            const c  = classifyConcepts(text);
             const id = msg.id || this.nextId;
 
             for (const k of kw) {
