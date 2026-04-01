@@ -27,6 +27,7 @@ class Appender {
 
     _ensureDir() {
         if (!fs.existsSync(this.dir)) fs.mkdirSync(this.dir, { recursive: true });
+        if (!fs.existsSync(this.walPath)) fs.writeFileSync(this.walPath, '[]');
     }
 
     write(role, msg) {
