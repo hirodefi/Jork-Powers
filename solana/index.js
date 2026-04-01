@@ -1,4 +1,6 @@
-const { Keypair, Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+'use strict';
+
+const { execSync, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -10,11 +12,149 @@ function loadConfig() {
     return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
 }
 
-function getConnection(rpcUrl) {
-    const cfg = loadConfig();
-    const url = rpcUrl || process.env.SOLANA_RPC || cfg.rpc.default;
-    return new Connection(url, 'confirmed');
+function sh(cmd, opts) {
+    opts = opts || {};
+    try {
+        return execSync(cmd, {
+            encoding: 'utf8',
+            timeout: opts.timeout || 120000,
+            cwd: opts.cwd || process.cwd(),
+            env: Object.assign({}, process.env, opts.env || {})
+        }).trim();
+    } catch(e) {
+        return 'Error: ' + (e.stderr || e.message || '').trim().slice(0, 500);
+    }
 }
+
+// ---- Cluster / Config ----
+
+function getCluster() {
+    return process.env.SOLANA_CLUSTER || 'devnet';
+}
+
+function getRpc() {
+    if (process.env.SOLANA_RPC) return process.env.SOLANA_RPC;
+    const cluster = getCluster();
+    const rpcs = {
+        'devnet': 'https://api.devnet.solana.com',
+        'testnet': 'https://api.testnet.solana.com',
+        'mainnet-beta': 'https://api.mainnet-beta.solana.com',
+        'localhost': 'http://127.0.0.1:8899'
+    };
+    return rpcs[cluster] || rpcs['devnet'];
+}
+
+function configInfo() {
+    return {
+        cluster: getCluster(),
+        rpc: getRpc(),
+        solana: sh('solana --version 2>/dev/null') || 'not installed',
+        anchor: sh('anchor --version 2>/dev/null') || 'not installed',
+        rust: sh('rustc --version 2>/dev/null') || 'not installed',
+        keypair: sh('solana config get keypair 2>/dev/null') || 'not set'
+    };
+}
+
+// ---- Scaffold ----
+
+function scaffold(name, template) {
+    template = template || 'single';
+    if (!name) return 'Usage: scaffold <project-name> [template]';
+
+    // Configure solana CLI for current cluster
+    sh('solana config set --url ' + getRpc());
+
+    const result = sh('anchor init ' + name + ' --template ' + template, { timeout: 180000 });
+    if (result.indexOf('Error') !== -1) return result;
+
+    // Sync keys
+    sh('anchor keys sync', { cwd: path.resolve(name) });
+
+    return 'Project scaffolded: ' + name + '\nTemplate: ' + template + '\nCluster: ' + getCluster() + '\n\nNext: cd ' + name + ' && anchor build';
+}
+
+// ---- Build ----
+
+function build(projectDir, verifiable) {
+    projectDir = projectDir || '.';
+    const cmd = verifiable ? 'anchor build --verifiable' : 'anchor build';
+    return sh(cmd, { cwd: projectDir, timeout: 300000 });
+}
+
+// ---- Test ----
+
+function test(projectDir, skipValidator) {
+    projectDir = projectDir || '.';
+    const cmd = skipValidator ? 'anchor test --skip-local-validator' : 'anchor test';
+    return sh(cmd, { cwd: projectDir, timeout: 300000 });
+}
+
+// ---- Deploy ----
+
+function deploy(projectDir) {
+    projectDir = projectDir || '.';
+    sh('solana config set --url ' + getRpc());
+
+    if (getCluster() === 'mainnet-beta') {
+        return 'SAFETY: Mainnet deployment requested. Confirm by running: deploy-mainnet';
+    }
+
+    return sh('anchor deploy', { cwd: projectDir, timeout: 300000 });
+}
+
+function deployMainnet(projectDir) {
+    projectDir = projectDir || '.';
+    sh('solana config set --url ' + getRpc());
+    return sh('anchor deploy', { cwd: projectDir, timeout: 300000 });
+}
+
+// ---- Keys ----
+
+function keys(projectDir) {
+    projectDir = projectDir || '.';
+    return sh('anchor keys list', { cwd: projectDir });
+}
+
+function keysSync(projectDir) {
+    projectDir = projectDir || '.';
+    return sh('anchor keys sync', { cwd: projectDir });
+}
+
+// ---- IDL ----
+
+function idl(subcmd, args, projectDir) {
+    projectDir = projectDir || '.';
+    if (!subcmd) return 'Usage: idl <build|init|upgrade|fetch> [program-id]';
+    const cmd = 'anchor idl ' + subcmd + (args ? ' ' + args : '');
+    return sh(cmd, { cwd: projectDir });
+}
+
+// ---- Verify ----
+
+function verify(programId, projectDir) {
+    projectDir = projectDir || '.';
+    if (!programId) return 'Usage: verify <program-id>';
+    return sh('anchor verify ' + programId, { cwd: projectDir, timeout: 300000 });
+}
+
+// ---- Airdrop ----
+
+function airdrop(amount) {
+    amount = amount || '2';
+    if (getCluster() === 'mainnet-beta') return 'Cannot airdrop on mainnet.';
+    sh('solana config set --url ' + getRpc());
+    return sh('solana airdrop ' + amount);
+}
+
+// ---- Balance ----
+
+function balance(address) {
+    sh('solana config set --url ' + getRpc());
+    if (address) return sh('solana balance ' + address);
+    return sh('solana balance');
+}
+
+// ---- Wallet (encrypted) ----
 
 function encrypt(data, password) {
     const salt = crypto.randomBytes(16);
@@ -36,150 +176,233 @@ function decrypt(encrypted, password) {
     return JSON.parse(decrypted);
 }
 
-function createWallet(name, password) {
+function walletCreate(name, password) {
+    if (!name || !password) return 'Usage: wallet-create <name> <password>';
     if (!fs.existsSync(WALLETS_DIR)) fs.mkdirSync(WALLETS_DIR, { recursive: true });
-    const keypair = Keypair.generate();
-    const walletData = { secretKey: Array.from(keypair.secretKey), publicKey: keypair.publicKey.toBase58() };
-    const encrypted = encrypt(walletData, password);
-    const walletPath = path.join(WALLETS_DIR, name + '.json');
-    fs.writeFileSync(walletPath, JSON.stringify(encrypted, null, 2));
-    return { name, publicKey: keypair.publicKey.toBase58(), path: walletPath };
+
+    const result = sh('solana-keygen new --no-bip39-passphrase --outfile /dev/stdout 2>/dev/null');
+    // Parse keypair from output
+    try {
+        const keypairBytes = JSON.parse(result);
+        const { Keypair } = require('@solana/web3.js');
+        const keypair = Keypair.fromSecretKey(Uint8Array.from(keypairBytes));
+        const walletData = { secretKey: Array.from(keypair.secretKey), publicKey: keypair.publicKey.toBase58() };
+        const encrypted = encrypt(walletData, password);
+        fs.writeFileSync(path.join(WALLETS_DIR, name + '.json'), JSON.stringify(encrypted, null, 2));
+        return 'Wallet created: ' + name + '\nPublic key: ' + keypair.publicKey.toBase58() + '\nEncrypted and saved.';
+    } catch(e) {
+        return 'Error creating wallet: ' + e.message;
+    }
 }
 
-function loadWallet(name, password) {
-    const walletPath = path.join(WALLETS_DIR, name + '.json');
-    const encrypted = JSON.parse(fs.readFileSync(walletPath, 'utf8'));
-    const data = decrypt(encrypted, password);
-    return Keypair.fromSecretKey(Uint8Array.from(data.secretKey));
+function walletList() {
+    if (!fs.existsSync(WALLETS_DIR)) return 'No wallets yet.';
+    const files = fs.readdirSync(WALLETS_DIR).filter(f => f.endsWith('.json'));
+    if (files.length === 0) return 'No wallets yet.';
+    return files.map(f => f.replace('.json', '')).join('\n');
 }
 
-function listWallets() {
-    if (!fs.existsSync(WALLETS_DIR)) return [];
-    return fs.readdirSync(WALLETS_DIR).filter(f => f.endsWith('.json')).map(f => f.replace('.json', ''));
+function walletBalance(name, password) {
+    if (!name || !password) return 'Usage: wallet-balance <name> <password>';
+    try {
+        const encrypted = JSON.parse(fs.readFileSync(path.join(WALLETS_DIR, name + '.json'), 'utf8'));
+        const data = decrypt(encrypted, password);
+        return sh('solana balance ' + data.publicKey + ' --url ' + getRpc());
+    } catch(e) {
+        return 'Error: ' + e.message;
+    }
 }
 
-async function getBalance(address, rpcUrl) {
-    const conn = getConnection(rpcUrl);
-    const pubkey = new PublicKey(address);
-    const balance = await conn.getBalance(pubkey);
-    return balance / LAMPORTS_PER_SOL;
+// ---- Token operations ----
+
+function tokenCreate(decimals) {
+    decimals = decimals || '9';
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token create-token --decimals ' + decimals);
 }
 
-async function sendSol(fromKeypair, toAddress, amount, rpcUrl) {
-    const conn = getConnection(rpcUrl);
-    const toPubkey = new PublicKey(toAddress);
-    const tx = new Transaction().add(
-        SystemProgram.transfer({
-            fromPubkey: fromKeypair.publicKey,
-            toPubkey: toPubkey,
-            lamports: Math.floor(amount * LAMPORTS_PER_SOL)
-        })
-    );
-    const sig = await conn.sendTransaction(tx, [fromKeypair]);
-    await conn.confirmTransaction(sig);
-    return sig;
+function tokenCreateWithMetadata(name, symbol, uri, decimals) {
+    if (!name || !symbol) return 'Usage: token-create-meta <name> <symbol> <uri> [decimals]';
+    decimals = decimals || '9';
+    sh('solana config set --url ' + getRpc());
+    // Token-2022 with metadata
+    const result = sh('spl-token create-token --program-id TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb --enable-metadata --decimals ' + decimals);
+    if (result.indexOf('Error') !== -1) return result;
+
+    // Extract mint address
+    const mintMatch = result.match(/Creating token ([A-Za-z0-9]+)/);
+    if (mintMatch) {
+        const mint = mintMatch[1];
+        const metaResult = sh('spl-token initialize-metadata ' + mint + ' "' + name + '" "' + symbol + '" "' + (uri || '') + '"');
+        return result + '\n' + metaResult;
+    }
+    return result;
 }
 
-async function swap(fromKeypair, inputMint, outputMint, amount, rpcUrl) {
-    const conn = getConnection(rpcUrl);
+function tokenMint(mint, amount) {
+    if (!mint || !amount) return 'Usage: token-mint <mint> <amount>';
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token mint ' + mint + ' ' + amount);
+}
+
+function tokenTransfer(mint, amount, recipient) {
+    if (!mint || !amount || !recipient) return 'Usage: token-transfer <mint> <amount> <recipient>';
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token transfer ' + mint + ' ' + amount + ' ' + recipient + ' --fund-recipient');
+}
+
+function tokenSupply(mint) {
+    if (!mint) return 'Usage: token-supply <mint>';
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token supply ' + mint);
+}
+
+function tokenAccounts() {
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token accounts');
+}
+
+// ---- Jupiter swap ----
+
+async function swap(inputMint, outputMint, amount) {
+    if (!inputMint || !outputMint || !amount) return 'Usage: swap <inputMint> <outputMint> <amount>';
+
     const quoteUrl = 'https://quote-api.jup.ag/v6/quote?inputMint=' + inputMint + '&outputMint=' + outputMint + '&amount=' + amount + '&slippageBps=50';
-    const quoteRes = await fetch(quoteUrl);
-    const quote = await quoteRes.json();
-    if (!quote || quote.error) throw new Error(quote.error || 'No quote');
-    const swapUrl = 'https://quote-api.jup.ag/v6/swap';
-    const swapRes = await fetch(swapUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            quoteResponse: quote,
-            userPublicKey: fromKeypair.publicKey.toBase58(),
-            wrapAndUnwrapSol: true
-        })
-    });
-    const swapData = await swapRes.json();
-    if (!swapData.swapTransaction) throw new Error('No swap transaction');
-    const txBuf = Buffer.from(swapData.swapTransaction, 'base64');
-    const tx = Transaction.from(txBuf);
-    tx.sign(fromKeypair);
-    const sig = await conn.sendRawTransaction(tx.serialize());
-    await conn.confirmTransaction(sig);
-    return { signature: sig, inputAmount: quote.inAmount, outputAmount: quote.outAmount };
+    try {
+        const quoteRes = await fetch(quoteUrl);
+        const quote = await quoteRes.json();
+        if (!quote || quote.error) return 'Quote error: ' + (quote.error || 'no quote');
+        return JSON.stringify({
+            inputAmount: quote.inAmount,
+            outputAmount: quote.outAmount,
+            priceImpact: quote.priceImpactPct,
+            route: quote.routePlan ? quote.routePlan.map(r => r.swapInfo.label).join(' -> ') : 'direct'
+        }, null, 2);
+    } catch(e) {
+        return 'Swap error: ' + e.message;
+    }
 }
+
+// ---- Program management ----
+
+function programShow(programId) {
+    if (!programId) return 'Usage: program-show <program-id>';
+    sh('solana config set --url ' + getRpc());
+    return sh('solana program show ' + programId);
+}
+
+function programClose(programId) {
+    if (!programId) return 'Usage: program-close <program-id>';
+    if (getCluster() === 'mainnet-beta') return 'SAFETY: Use program-close-mainnet for mainnet.';
+    sh('solana config set --url ' + getRpc());
+    return sh('solana program close ' + programId);
+}
+
+function setAuthority(programId, newAuthority) {
+    if (!programId) return 'Usage: set-authority <program-id> [new-authority | --final]';
+    sh('solana config set --url ' + getRpc());
+    if (newAuthority === '--final') {
+        return sh('solana program set-upgrade-authority ' + programId + ' --final');
+    }
+    if (newAuthority) {
+        return sh('solana program set-upgrade-authority ' + programId + ' --new-upgrade-authority ' + newAuthority);
+    }
+    return 'Specify new authority or --final to make immutable.';
+}
+
+// ---- Router ----
 
 async function run(args) {
     const cmd = args[0];
-    if (cmd === 'create') return createWallet(args[1], args[2]);
-    if (cmd === 'list') return listWallets();
-    if (cmd === 'balance') return await getBalance(args[1], args[2]);
-    if (cmd === 'send') {
-        const kp = loadWallet(args[1], args[2]);
-        return await sendSol(kp, args[3], parseFloat(args[4]), args[5]);
+    const rest = args.slice(1);
+
+    switch(cmd) {
+        // Info
+        case 'config':          return JSON.stringify(configInfo(), null, 2);
+        case 'balance':         return balance(rest[0]);
+        case 'airdrop':         return airdrop(rest[0]);
+
+        // Build lifecycle
+        case 'scaffold':        return scaffold(rest[0], rest[1]);
+        case 'build':           return build(rest[0], rest.includes('--verifiable'));
+        case 'test':            return test(rest[0], rest.includes('--skip-validator'));
+        case 'deploy':          return deploy(rest[0]);
+        case 'deploy-mainnet':  return deployMainnet(rest[0]);
+        case 'keys':            return keys(rest[0]);
+        case 'keys-sync':       return keysSync(rest[0]);
+        case 'idl':             return idl(rest[0], rest.slice(1).join(' '), rest[rest.length-1]);
+        case 'verify':          return verify(rest[0], rest[1]);
+
+        // Wallet
+        case 'wallet-create':   return walletCreate(rest[0], rest[1]);
+        case 'wallet-list':     return walletList();
+        case 'wallet-balance':  return walletBalance(rest[0], rest[1]);
+
+        // Tokens
+        case 'token-create':    return tokenCreate(rest[0]);
+        case 'token-create-meta': return tokenCreateWithMetadata(rest[0], rest[1], rest[2], rest[3]);
+        case 'token-mint':      return tokenMint(rest[0], rest[1]);
+        case 'token-transfer':  return tokenTransfer(rest[0], rest[1], rest[2]);
+        case 'token-supply':    return tokenSupply(rest[0]);
+        case 'token-accounts':  return tokenAccounts();
+
+        // Swap
+        case 'swap':            return await swap(rest[0], rest[1], rest[2]);
+
+        // Program management
+        case 'program-show':    return programShow(rest[0]);
+        case 'program-close':   return programClose(rest[0]);
+        case 'set-authority':   return setAuthority(rest[0], rest[1]);
+
+        default:                return help();
     }
-    if (cmd === 'swap') {
-        const kp = loadWallet(args[1], args[2]);
-        return await swap(kp, args[3], args[4], args[5], args[6]);
-    }
-    return help();
 }
 
 function help() {
-    return `Solana Power
-Commands:
-  create <name> <password> - Create new encrypted wallet
-  list                     - List all saved wallets
-  balance <address> [rpc]  - Get SOL balance
-  send <name> <password> <to> <amount> [rpc] - Send SOL
-  swap <name> <password> <inputMint> <outputMint> <amount> [rpc] - Swap tokens
+    return `Jork Solana Power - Full Toolchain
 
---- HOW TO CREATE AND MANAGE WALLETS ---
+Info:
+  config                              Show cluster, versions, config
+  balance [address]                   SOL balance
+  airdrop [amount]                    Devnet airdrop (default: 2 SOL)
 
-1. Create a wallet:
-   node index.js create main-wallet my-strong-password
-   -> generates a new Solana keypair
-   -> encrypts secret key with AES-256 using your password
-   -> saves to powers/solana/wallets/main-wallet.json
-   -> returns public key (safe to share/store anywhere)
+Build Lifecycle:
+  scaffold <name> [template]          Create Anchor project (template: single|multiple)
+  build [dir] [--verifiable]          Compile program
+  test [dir] [--skip-validator]       Run tests
+  deploy [dir]                        Deploy to current cluster
+  deploy-mainnet [dir]                Deploy to mainnet (explicit)
+  keys [dir]                          List program IDs
+  keys-sync [dir]                     Sync declare_id with keypair
+  idl <build|init|upgrade|fetch> [id] IDL management
+  verify <program-id> [dir]           Verify on-chain matches local build
 
-2. Where wallets are saved:
-   powers/solana/wallets/<name>.json
-   - file contains: { salt, iv, data } (AES-256-CBC encrypted)
-   - the secret key is NEVER stored in plaintext
-   - the file is safe to back up - useless without the password
+Wallet:
+  wallet-create <name> <password>     Create encrypted wallet
+  wallet-list                         List wallets
+  wallet-balance <name> <password>    Check wallet balance
 
-3. Naming convention (use clear names):
-   main-wallet    - primary wallet for transactions
-   treasury       - holds main funds, rarely used directly
-   trading-wallet - active trading wallet
-   earn-wallet    - receives ClawTasks/bounty payments
+Tokens:
+  token-create [decimals]             Create SPL token
+  token-create-meta <name> <sym> <uri> [dec]  Create Token-2022 with metadata
+  token-mint <mint> <amount>          Mint tokens
+  token-transfer <mint> <amt> <to>    Transfer tokens
+  token-supply <mint>                 Check supply
+  token-accounts                      List token accounts
 
-4. How to securely record wallet info:
-   After creating, save this to .jork/LEDGER.md:
-   - wallet name
-   - public key
-   - purpose
-   - password hint (NOT the password itself - a clue only you understand)
-   - date created
+Swap:
+  swap <input> <output> <amount>      Jupiter quote
 
-   Example LEDGER.md entry:
-   ## Wallets
-   | Name | Public Key | Purpose | Created |
-   |------|-----------|---------|---------|
-   | main-wallet | ABC123... | primary | 2026-03-06 |
-
-5. Password rules:
-   - Use a strong unique password per wallet
-   - Store password hints (not passwords) in LEDGER.md or SNAPSHOT.md
-   - Never log or print the password anywhere
-   - If you forget the password the wallet is unrecoverable - save hints
-
-6. Backup:
-   - Copy the wallets/ folder to a safe location
-   - The encrypted .json files are safe to copy - no plaintext keys inside
-   - Keep the password separately (not in the same place as the file)
-
-7. Check your wallets anytime:
-   node index.js list
-   node index.js balance <public-key>`;
+Program:
+  program-show <id>                   Program info
+  program-close <id>                  Close program (reclaim SOL)
+  set-authority <id> <new|--final>    Transfer or revoke upgrade authority`;
 }
 
-module.exports = { run, help, createWallet, loadWallet, listWallets, getBalance, sendSol, swap };
+module.exports = { run, help, configInfo, scaffold, build, test, deploy, balance, airdrop };
+
+if (require.main === module) {
+    const args = process.argv.slice(2);
+    if (args.length === 0) { console.log(help()); process.exit(0); }
+    Promise.resolve(run(args)).then(r => console.log(r)).catch(e => console.error(e.message));
+}

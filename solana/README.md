@@ -1,53 +1,38 @@
 # Solana Power
 
-Wallet management, transactions, and token swaps on Solana.
+Full Solana toolchain. One power, everything you need.
 
-## Features
-
-- Create encrypted wallets (AES-256)
-- Store keypairs securely with password
-- Check SOL balance
-- Send SOL
-- Swap tokens via Jupiter
-
-## RPC Configuration
-
-Default uses public Solana mainnet. For better performance, set:
+## Commands
 
 ```bash
-export SOLANA_RPC="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
-```
+# Info
+node index.js config
+node index.js balance [address]
+node index.js airdrop [amount]
 
-Or pass RPC URL to each command.
+# Build lifecycle
+node index.js scaffold my-project
+node index.js build [dir]
+node index.js test [dir]
+node index.js deploy [dir]
+node index.js keys [dir]
+node index.js verify <program-id>
 
-## Usage
+# Wallet
+node index.js wallet-create <name> <password>
+node index.js wallet-list
+node index.js wallet-balance <name> <password>
 
-```bash
-# Create wallet
-node index.js create mywallet mypassword
+# Tokens
+node index.js token-create [decimals]
+node index.js token-create-meta <name> <symbol> <uri> [decimals]
+node index.js token-mint <mint> <amount>
+node index.js token-transfer <mint> <amount> <recipient>
 
-# List wallets
-node index.js list
+# Swap (Jupiter)
+node index.js swap <inputMint> <outputMint> <amount>
 
-# Check balance
-node index.js balance <address>
-
-# Send SOL
-node index.js send mywallet mypassword <to_address> 0.1
-
-# Swap tokens (SOL -> USDC
- node index.js swap mywallet mypassword So1111111111111111111111111111111112 EPjFWdd5AufqzzGfCfSJLSJ7HbLx3zgvLTo5b6ELpDRp 100000000
-```
-
-## Wallet Storage
-
-Wallets stored in `wallets/<name>.json` with:
-- AES-256-CBC encryption
-- PBKDF2 key derivation (100k iterations)
-- Random salt + IV per wallet
-
-## Dependencies
-
-```bash
-npm install @solana/web3.js @solana/spl-token
+# Program management
+node index.js program-show <id>
+node index.js set-authority <id> <new|--final>
 ```

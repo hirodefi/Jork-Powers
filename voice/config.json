@@ -1,14 +1,8 @@
 {
   "name": "voice",
   "version": "1.0.0",
-  "description": "Voice transcription and generation",
-  "requires": [
-    "openai-whisper",
-    "TTS"
-  ],
-  "whisper_model": "small",
-  "tts_model": "tts_models/multilingual/multi-dataset/xtts_v2",
-  "default_voice": "default",
-  "speed": 1.2,
+  "description": "Transcribe voice messages via Whisper tiny",
+  "requires": ["openai-whisper"],
+  "whisper_model": "tiny",
   "language": "en"
 }

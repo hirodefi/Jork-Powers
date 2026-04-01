@@ -1,0 +1,6 @@
+{
+  "name": "web2",
+  "version": "1.0.0",
+  "description": "Server setup, deployment, nginx, SSL, domains, databases, SSH, REST APIs",
+  "requires": []
+}
