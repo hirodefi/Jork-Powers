@@ -28,11 +28,11 @@ def fetch_feed(url):
         'time': e.get('published', '')
     } for e in feed.entries[:5]]
 
-def monitor(topic, interval=120, callback=None):
-    """Continuously poll for new headlines on a topic"""
+def monitor(topic, interval=120, callback=None, max_checks=10):
+    """Poll for new headlines on a topic. Stops after max_checks iterations."""
     seen_titles = set()
     sources = DEFAULT_SOURCES.get(topic, DEFAULT_SOURCES['general'])
-    while True:
+    for _ in range(max_checks):
         new_items = []
         for url in sources:
             try:
@@ -46,7 +46,8 @@ def monitor(topic, interval=120, callback=None):
             callback(new_items)
         elif new_items:
             print(json.dumps(new_items, indent=2))
-        time.sleep(interval)
+        if _ < max_checks - 1:
+            time.sleep(interval)
 
 def fetch_now(topic='general', limit=10):
     """Get current headlines on a topic"""

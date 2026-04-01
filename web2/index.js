@@ -135,9 +135,11 @@ function sshTest(host) {
 
 // ---- Deploy (SSH) ----
 
-function deploySsh(localDir, remoteTarget) {
-    if (!localDir || !remoteTarget) return 'Usage: deploy-ssh <local-dir> <user@host:/path>';
-    return sh('rsync -avz --delete ' + localDir + '/ ' + remoteTarget + '/', { timeout: 300000 });
+function deploySsh(localDir, remoteTarget, clean) {
+    if (!localDir || !remoteTarget) return 'Usage: deploy-ssh <local-dir> <user@host:/path> [--clean]';
+    var flags = '-avz';
+    if (clean) flags += ' --delete';
+    return sh('rsync ' + flags + ' ' + localDir + '/ ' + remoteTarget + '/', { timeout: 300000 });
 }
 
 // ---- Deploy (Vercel) ----
@@ -285,7 +287,7 @@ function run(args) {
         case 'ssh-test':        return sshTest(rest[0]);
 
         // Deploy
-        case 'deploy-ssh':      return deploySsh(rest[0], rest[1]);
+        case 'deploy-ssh':      return deploySsh(rest[0], rest[1], rest.includes('--clean'));
         case 'deploy-vercel':   return deployVercel(rest[0]);
 
         // PM2
@@ -331,7 +333,7 @@ SSH:
   ssh-test <user@host>                    Test SSH connection
 
 Deploy:
-  deploy-ssh <local-dir> <user@host:/path>  Deploy via rsync
+  deploy-ssh <local-dir> <user@host:/path> [--clean]  Deploy via rsync (--clean removes remote extras)
   deploy-vercel [dir]                       Deploy to Vercel
 
 PM2:

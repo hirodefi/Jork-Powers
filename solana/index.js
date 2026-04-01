@@ -180,10 +180,10 @@ function walletCreate(name, password) {
     if (!name || !password) return 'Usage: wallet-create <name> <password>';
     if (!fs.existsSync(WALLETS_DIR)) fs.mkdirSync(WALLETS_DIR, { recursive: true });
 
-    const result = sh('solana-keygen new --no-bip39-passphrase --outfile /dev/stdout 2>/dev/null');
-    // Parse keypair from output
+    const tmpFile = path.join(WALLETS_DIR, '.tmp-' + Date.now() + '.json');
     try {
-        const keypairBytes = JSON.parse(result);
+        sh('solana-keygen new --no-bip39-passphrase --outfile ' + tmpFile + ' 2>/dev/null');
+        const keypairBytes = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
         const { Keypair } = require('@solana/web3.js');
         const keypair = Keypair.fromSecretKey(Uint8Array.from(keypairBytes));
         const walletData = { secretKey: Array.from(keypair.secretKey), publicKey: keypair.publicKey.toBase58() };
@@ -192,6 +192,8 @@ function walletCreate(name, password) {
         return 'Wallet created: ' + name + '\nPublic key: ' + keypair.publicKey.toBase58() + '\nEncrypted and saved.';
     } catch(e) {
         return 'Error creating wallet: ' + e.message;
+    } finally {
+        try { fs.unlinkSync(tmpFile); } catch(e) {}
     }
 }
 
@@ -298,10 +300,13 @@ function programClose(programId) {
     return sh('solana program close ' + programId);
 }
 
-function setAuthority(programId, newAuthority) {
+function setAuthority(programId, newAuthority, confirmed) {
     if (!programId) return 'Usage: set-authority <program-id> [new-authority | --final]';
     sh('solana config set --url ' + getRpc());
     if (newAuthority === '--final') {
+        if (!confirmed) {
+            return 'SAFETY: Making a program immutable is IRREVERSIBLE. The program can never be upgraded again.\nTo confirm, run: set-authority ' + programId + ' --final --confirm';
+        }
         return sh('solana program set-upgrade-authority ' + programId + ' --final');
     }
     if (newAuthority) {
@@ -352,7 +357,7 @@ async function run(args) {
         // Program management
         case 'program-show':    return programShow(rest[0]);
         case 'program-close':   return programClose(rest[0]);
-        case 'set-authority':   return setAuthority(rest[0], rest[1]);
+        case 'set-authority':   return setAuthority(rest[0], rest[1], rest.includes('--confirm'));
 
         default:                return help();
     }
