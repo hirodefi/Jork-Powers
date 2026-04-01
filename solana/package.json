@@ -1,0 +1,9 @@
+{
+  "name": "jork-solana-power",
+  "version": "2.0.0",
+  "type": "commonjs",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.0"
+  }
+}
