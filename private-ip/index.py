@@ -18,7 +18,7 @@ def start_tor():
     """Start Tor if not running"""
     if check_tor():
         return True
-    subprocess.Popen([sudp', 'service', 'tor', 'start'])
+    subprocess.Popen(['sudo', 'service', 'tor', 'start'])
     time.sleep(3)
     return check_tor()
 
@@ -39,7 +39,7 @@ def rotate():
         time.sleep(2)
         return True
     except:
-        os system('systemctl reload tor 2>/dev/null || service tor reload 2>/dev/null')
+        os.system('systemctl reload tor 2>/dev/null || service tor reload 2>/dev/null')
         time.sleep(2)
         return True
 

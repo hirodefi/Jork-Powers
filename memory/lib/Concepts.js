@@ -9,16 +9,25 @@ const STOPWORDS = new Set([
 ]);
 
 const CONCEPTS = {
-    radar:          /radar|grpc|pipeline|stream|websocket|monitor|feed/i,
-    market_making:  /market.mak|mm\b|spread|liquidity|depth|order.book/i,
-    token_ops:      /launch|mint|deploy|pump|snipe|token|ca\b|contract/i,
-    wallet_ops:     /wallet|keypair|sign|transfer|balance|lamport/i,
-    trading:        /trade|swap|buy|sell|entry|exit|pnl|profit|loss/i,
-    goals:          /goal|plan|want to|going to|intend|focus|next step/i,
-    issues:         /bug|fix|error|broke|fail|crash|wrong|problem/i,
-    people:         /told me|he said|she said|team|partner|user|investor/i,
-    identity:       /i am|i feel|my purpose|i think about myself/i,
-    treasury:       /treasury|fund|budget|cost|revenue|earn|income/i,
+    // Solana core
+    solana_program: /anchor|program|instruction|account.model|declare_id|solana.program|bpf|sbpf|entrypoint/i,
+    pda:            /pda|program.derived|find_program_address|seeds|bump|invoke_signed/i,
+    token:          /spl.token|token.2022|mint|token.account|associated.token|token.extension|metadata/i,
+    nft:            /nft|metaplex|bubblegum|candy.machine|collection|compressed.nft|cnft/i,
+    defi:           /amm|swap|liquidity|lending|staking|governance|vault|escrow|collateral/i,
+    deployment:     /deploy|devnet|mainnet|testnet|verifiable.build|upgrade.authority|anchor.deploy/i,
+    transaction:    /transaction|blockhash|compute.unit|priority.fee|signature|confirm/i,
+
+    // Ecosystem
+    ecosystem:      /jupiter|raydium|meteora|orca|helius|pyth|switchboard|phantom|solflare/i,
+    wallet:         /wallet|keypair|sign|transfer|balance|lamport|airdrop|solana.cli/i,
+    frontend:       /next\.?js|react|wallet.adapter|frontend|dapp|web3\.js|solana.kit/i,
+    infrastructure: /nginx|ssl|certbot|pm2|server|deploy|vercel|domain|ssh|firewall/i,
+
+    // General
+    goals:          /goal|plan|want to|going to|intend|focus|next step|roadmap/i,
+    issues:         /bug|fix|error|broke|fail|crash|wrong|problem|blocked/i,
+    identity:       /i am|i feel|who i am|my purpose|evolve|grow/i,
 };
 
 function extractKeywords(msg) {

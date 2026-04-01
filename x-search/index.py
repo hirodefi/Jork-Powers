@@ -44,7 +44,7 @@ def search(query, limit=20):
 
 def user_tweets(username, limit=20):
     """Get tweets from a user"""
-    for instance in NITTE_INSTANCES:
+    for instance in NITTER_INSTANCES:
         try:
             html = _get(instance, f'/{username}')
             tweets = _parse_tweets(html)
