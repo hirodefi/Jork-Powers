@@ -19,7 +19,7 @@ def _parse_tweets(html):
     tweets = []
     for item in soup.select('.timeline-item'):
         content = item.select_one('.tweet-content')
-        stats = item.select_name('time')
+        stats = item.find('time')
         if content:
             tweets.append({
                 'text': content.get_text(strip=True),
