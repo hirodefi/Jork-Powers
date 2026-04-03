@@ -265,6 +265,124 @@ app.listen(PORT, () => console.log('API running on port ' + PORT));
 
 // ---- Router ----
 
+// ---- SPA nginx config ----
+
+function nginxSpa(domain, dir) {
+    if (!domain || !dir) return 'Usage: nginx-spa <domain> <dir>';
+
+    var config = `server {
+    listen 80;
+    server_name ${domain};
+
+    root ${dir};
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+}`;
+
+    var sitePath = '/etc/nginx/sites-available/' + domain;
+    var enablePath = '/etc/nginx/sites-enabled/' + domain;
+    fs.writeFileSync(sitePath, config);
+    try { fs.symlinkSync(sitePath, enablePath); } catch(e) {}
+    var testResult = sh('nginx -t 2>&1');
+    if (testResult.indexOf('successful') !== -1) {
+        sh('systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null');
+        return 'SPA config written for ' + domain + ' -> ' + dir + '\n' + testResult;
+    }
+    return 'Config written but nginx test failed:\n' + testResult;
+}
+
+// ---- API + Frontend combined nginx ----
+
+function nginxApiFrontend(domain, apiPort, frontendPort) {
+    if (!domain || !apiPort || !frontendPort) return 'Usage: nginx-api-frontend <domain> <api-port> <frontend-port>';
+
+    var config = `server {
+    listen 80;
+    server_name ${domain};
+
+    location /api {
+        proxy_pass http://localhost:${apiPort};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:${frontendPort};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}`;
+
+    var sitePath = '/etc/nginx/sites-available/' + domain;
+    var enablePath = '/etc/nginx/sites-enabled/' + domain;
+    fs.writeFileSync(sitePath, config);
+    try { fs.symlinkSync(sitePath, enablePath); } catch(e) {}
+    var testResult = sh('nginx -t 2>&1');
+    if (testResult.indexOf('successful') !== -1) {
+        sh('systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null');
+        return 'API+Frontend config for ' + domain + ' (API :' + apiPort + ', Frontend :' + frontendPort + ')\n' + testResult;
+    }
+    return 'Config written but nginx test failed:\n' + testResult;
+}
+
+// ---- Deploy checklist ----
+
+function deployChecklist(domain) {
+    var checks = [];
+    checks.push('=== Pre-Launch Checklist' + (domain ? ' for ' + domain : '') + ' ===\n');
+
+    // SSL
+    if (domain) {
+        var certExists = sh('ls /etc/letsencrypt/live/' + domain + '/fullchain.pem 2>/dev/null');
+        checks.push('[' + (certExists ? 'OK' : '!!') + '] SSL certificate' + (certExists ? '' : ' - run: node index.js ssl ' + domain));
+    } else {
+        checks.push('[??] SSL certificate - specify domain to check');
+    }
+
+    // Firewall
+    var ufwStatus = sh('ufw status 2>/dev/null');
+    checks.push('[' + (ufwStatus.indexOf('active') !== -1 ? 'OK' : '!!') + '] Firewall (ufw)' + (ufwStatus.indexOf('active') !== -1 ? '' : ' - run: node index.js firewall-setup'));
+
+    // Nginx
+    var nginxActive = sh('systemctl is-active nginx 2>/dev/null');
+    checks.push('[' + (nginxActive === 'active' ? 'OK' : '!!') + '] Nginx' + (nginxActive === 'active' ? '' : ' - install/start nginx'));
+
+    // PM2
+    var pm2Running = sh('pm2 list 2>/dev/null | grep online | wc -l').trim();
+    checks.push('[' + (parseInt(pm2Running) > 0 ? 'OK' : '!!') + '] PM2 processes (' + pm2Running + ' online)');
+
+    // Node
+    var nodeVer = sh('node --version 2>/dev/null');
+    checks.push('[' + (nodeVer ? 'OK' : '!!') + '] Node.js ' + (nodeVer || 'not installed'));
+
+    // DNS
+    if (domain) {
+        var dns = sh('dig +short ' + domain + ' 2>/dev/null');
+        var serverIp = sh('curl -s ifconfig.me 2>/dev/null');
+        checks.push('[' + (dns.trim() === serverIp.trim() ? 'OK' : '!!') + '] DNS for ' + domain + (dns ? ' -> ' + dns.trim() : ' - not resolving'));
+    }
+
+    checks.push('\n[OK] = good | [!!] = needs attention | [??] = check manually');
+    return checks.join('\n');
+}
+
 function run(args) {
     const cmd = args[0];
     const rest = args.slice(1);
@@ -275,6 +393,8 @@ function run(args) {
 
         // Nginx
         case 'nginx-site':      return nginxSite(rest[0], rest[1], { ssl: rest.includes('--ssl'), ws: rest.includes('--ws') });
+        case 'nginx-spa':       return nginxSpa(rest[0], rest[1]);
+        case 'nginx-api-frontend': return nginxApiFrontend(rest[0], rest[1], rest[2]);
         case 'nginx-status':    return nginxStatus();
         case 'nginx-remove':    return nginxRemove(rest[0]);
 
@@ -304,6 +424,9 @@ function run(args) {
         case 'npm-init':        return npmInit(rest[0], rest[1]);
         case 'api-scaffold':    return apiScaffold(rest[0]);
 
+        // Checklist
+        case 'deploy-checklist': return deployChecklist(rest[0]);
+
         // Firewall
         case 'firewall-setup':  return firewallSetup();
         case 'firewall-status': return firewallStatus();
@@ -321,6 +444,8 @@ System:
 
 Nginx:
   nginx-site <domain> <port> [--ssl --ws] Configure reverse proxy
+  nginx-spa <domain> <dir>                SPA config (try_files, caching, gzip)
+  nginx-api-frontend <domain> <api-port> <frontend-port>  Combined API + frontend proxy
   nginx-status                            Show nginx status and sites
   nginx-remove <domain>                   Remove site config
 
@@ -349,6 +474,9 @@ MongoDB:
 Scaffold:
   npm-init <dir> [next|react|express]     Create project from template
   api-scaffold <name>                     Express REST API boilerplate
+
+Checklist:
+  deploy-checklist [domain]               Pre-launch verification (SSL, firewall, nginx, PM2, DNS)
 
 Firewall:
   firewall-setup                          Enable UFW (22, 80, 443)
