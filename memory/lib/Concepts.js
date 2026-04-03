@@ -28,6 +28,7 @@ const CONCEPTS = {
     goals:          /goal|plan|want to|going to|intend|focus|next step|roadmap/i,
     issues:         /bug|fix|error|broke|fail|crash|wrong|problem|blocked/i,
     identity:       /i am|i feel|who i am|my purpose|evolve|grow/i,
+    cofounder:      /prefer|like to|usually|my setup|my laptop|my server|i use|deploy to|my framework|my stack|i work on/i,
 };
 
 function extractKeywords(msg) {
