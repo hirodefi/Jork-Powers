@@ -315,11 +315,19 @@ function setAuthority(programId, newAuthority, confirmed) {
     return 'Specify new authority or --final to make immutable.';
 }
 
+// ---- Input sanitization ----
+
+function sanitize(input) {
+    if (!input) return '';
+    return input.replace(/[^a-zA-Z0-9._\-\/]/g, '');
+}
+
 // ---- Transaction history ----
 
 function txHistory(address, limit) {
     if (!address) return 'Usage: tx-history <address> [limit]';
-    limit = limit || '10';
+    address = sanitize(address);
+    limit = parseInt(limit) || 10;
     sh('solana config set --url ' + getRpc());
     try {
         const result = require('child_process').execSync(
@@ -339,6 +347,7 @@ function txHistory(address, limit) {
 
 function txDetail(signature) {
     if (!signature) return 'Usage: tx-detail <signature>';
+    signature = sanitize(signature);
     sh('solana config set --url ' + getRpc());
     return sh('solana confirm -v ' + signature + ' 2>&1 | head -50');
 }
@@ -347,12 +356,14 @@ function txDetail(signature) {
 
 function accountInfo(address) {
     if (!address) return 'Usage: account-info <address>';
+    address = sanitize(address);
     sh('solana config set --url ' + getRpc());
     return sh('solana account ' + address);
 }
 
 function accountTokens(address) {
     if (!address) return 'Usage: account-tokens <address>';
+    address = sanitize(address);
     sh('solana config set --url ' + getRpc());
     return sh('spl-token accounts --owner ' + address + ' 2>&1');
 }

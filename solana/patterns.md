@@ -164,6 +164,106 @@ tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 5000 }));
 // Put these FIRST in the transaction instructions
 ```
 
+## NFT Minting (Metaplex Core)
+
+```ts
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { create, mplCore } from '@metaplex-foundation/mpl-core';
+
+const umi = createUmi(rpcUrl).use(mplCore());
+
+// Create a single NFT (~0.003 SOL)
+await create(umi, {
+    name: 'My NFT',
+    uri: 'https://arweave.net/metadata.json',
+}).sendAndConfirm(umi);
+
+// Create in a collection
+await create(umi, {
+    asset: generateSigner(umi),
+    collection: collectionAddress,
+    name: 'Item #1',
+    uri: 'https://arweave.net/item1.json',
+    plugins: [{
+        type: 'Royalties',
+        basisPoints: 500, // 5%
+        creators: [{ address: creator, percentage: 100 }],
+        ruleSet: ruleSet('None'),
+    }],
+}).sendAndConfirm(umi);
+```
+
+## DAO / Governance Pattern
+
+```rust
+#[account]
+pub struct Proposal {
+    pub creator: Pubkey,
+    pub title: String,
+    pub description: String,
+    pub votes_for: u64,
+    pub votes_against: u64,
+    pub deadline: i64,
+    pub executed: bool,
+    pub bump: u8,
+}
+
+#[account]
+pub struct Vote {
+    pub voter: Pubkey,
+    pub proposal: Pubkey,
+    pub choice: bool, // true = for, false = against
+    pub weight: u64,
+}
+
+// PDA: ["proposal", proposal_id.to_le_bytes()]
+// PDA: ["vote", proposal.key(), voter.key()]
+// Execution: if votes_for > threshold && clock > deadline, execute
+```
+
+## Solana Actions / Blinks
+
+```ts
+// GET endpoint returns action metadata
+app.get('/api/action', (req, res) => {
+    res.json({
+        icon: 'https://example.com/icon.png',
+        title: 'Donate SOL',
+        description: 'Send SOL to support the project',
+        label: 'Donate',
+    });
+});
+
+// POST returns a serialized transaction for the wallet to sign
+app.post('/api/action', async (req, res) => {
+    const { account } = req.body;
+    const tx = new Transaction().add(
+        SystemProgram.transfer({
+            fromPubkey: new PublicKey(account),
+            toPubkey: TREASURY,
+            lamports: 0.1 * LAMPORTS_PER_SOL,
+        })
+    );
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    tx.feePayer = new PublicKey(account);
+    res.json({ transaction: tx.serialize({ requireAllSignatures: false }).toString('base64') });
+});
+```
+
+## Pyth Oracle Integration
+
+```ts
+import { PythSolanaReceiver } from '@pythnetwork/pyth-solana-receiver';
+
+// Get SOL/USD price
+const pythReceiver = new PythSolanaReceiver({ connection, wallet });
+const SOL_USD_FEED = '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d';
+const priceUpdate = await pythReceiver.fetchPriceUpdateAccount(SOL_USD_FEED);
+const price = priceUpdate.price; // scaled integer
+const expo = priceUpdate.expo;   // negative exponent
+const actualPrice = price * Math.pow(10, expo);
+```
+
 ## Common Mints
 
 ```
