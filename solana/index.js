@@ -315,6 +315,98 @@ function setAuthority(programId, newAuthority, confirmed) {
     return 'Specify new authority or --final to make immutable.';
 }
 
+// ---- Transaction history ----
+
+function txHistory(address, limit) {
+    if (!address) return 'Usage: tx-history <address> [limit]';
+    limit = limit || '10';
+    sh('solana config set --url ' + getRpc());
+    try {
+        const { Connection, PublicKey } = require('@solana/web3.js');
+        const conn = new Connection(getRpc(), 'confirmed');
+        // Sync wrapper since we need to return from a sync function
+        const result = require('child_process').execSync(
+            'node -e "const{Connection,PublicKey}=require(\'@solana/web3.js\');' +
+            'new Connection(\'' + getRpc() + '\',\'confirmed\')' +
+            '.getSignaturesForAddress(new PublicKey(\'' + address + '\'),{limit:' + limit + '})' +
+            '.then(s=>console.log(JSON.stringify(s.map(t=>({sig:t.signature.slice(0,16)+\'...\',slot:t.slot,time:t.blockTime?new Date(t.blockTime*1000).toISOString():\'?\',err:t.err?\'FAIL\':\'OK\'})))))"',
+            { encoding: 'utf8', timeout: 15000 }
+        ).trim();
+        var sigs = JSON.parse(result);
+        return 'Last ' + sigs.length + ' transactions for ' + address + ':\n' +
+            sigs.map(function(s, i) { return (i+1) + '. ' + s.sig + ' | slot ' + s.slot + ' | ' + s.time + ' | ' + s.err; }).join('\n');
+    } catch(e) {
+        return 'Error: ' + e.message;
+    }
+}
+
+function txDetail(signature) {
+    if (!signature) return 'Usage: tx-detail <signature>';
+    sh('solana config set --url ' + getRpc());
+    return sh('solana confirm -v ' + signature + ' 2>&1 | head -50');
+}
+
+// ---- Account reading ----
+
+function accountInfo(address) {
+    if (!address) return 'Usage: account-info <address>';
+    sh('solana config set --url ' + getRpc());
+    return sh('solana account ' + address);
+}
+
+function accountTokens(address) {
+    if (!address) return 'Usage: account-tokens <address>';
+    sh('solana config set --url ' + getRpc());
+    return sh('spl-token accounts --owner ' + address + ' 2>&1');
+}
+
+// ---- Error diagnosis ----
+
+var SOLANA_ERRORS = {
+    'insufficient funds': 'Not enough SOL for transaction fees. Airdrop on devnet: solana airdrop 2. On mainnet: deposit SOL to your wallet.',
+    'insufficientfunds': 'Not enough SOL. Check balance with: solana balance',
+    'accountnotfound': 'The account does not exist on-chain. It may not have been created yet or may be on a different cluster.',
+    'programfailedtocomplete': 'The program ran out of compute units or hit a runtime error. Try increasing compute budget or check program logs.',
+    'blockhashnotfound': 'Transaction expired. The blockhash was too old. Retry with a fresh blockhash.',
+    'transactionsimulationfailed': 'Transaction simulation failed before sending. Check the instruction data and accounts.',
+    'custom program error': 'An Anchor/program-specific error. Check the error code against your program\'s error enum.',
+    'accountownermismatch': 'The account is owned by a different program than expected. Check the owner field.',
+    'accountdatatooshort': 'Account data is smaller than expected. The account may not be initialized or may use a different schema.',
+    'declaredprogramiddoesnotmatch': 'The program ID in declare_id! does not match the deployed keypair. Run: anchor keys sync',
+    'anchor constraint violated': 'An Anchor constraint check failed (#[account(constraint = ...)]). Check the account relationships.',
+    'seeds constraint was violated': 'PDA derivation failed. Check the seeds, bump, and program ID used in the constraint.',
+    'access violation': 'Memory access violation in BPF. Usually means writing to an account you don\'t own or buffer overflow.',
+    'compute budget exceeded': 'Ran out of compute units. Add: ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 })',
+    'rent exempt': 'Account must be rent-exempt. Ensure enough lamports for: (data_size + 128) * 3480 * 2',
+};
+
+function diagnose(errorText) {
+    if (!errorText) return 'Usage: diagnose <error-text>';
+    var lower = errorText.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+    var matches = [];
+    for (var key in SOLANA_ERRORS) {
+        if (lower.indexOf(key.replace(/[^a-z0-9 ]/g, '')) !== -1) {
+            matches.push(key + ': ' + SOLANA_ERRORS[key]);
+        }
+    }
+    if (matches.length > 0) return 'Diagnosis:\n' + matches.join('\n\n');
+    return 'No known diagnosis for: ' + errorText + '\nTry searching: https://explorer.solana.com or the Anchor docs.';
+}
+
+// ---- Deploy + verify in one step ----
+
+function deployVerify(programId, projectDir) {
+    if (!programId) return 'Usage: deploy-verify <program-id> [dir]';
+    projectDir = projectDir || '.';
+    sh('solana config set --url ' + getRpc());
+    var buildResult = sh('anchor build --verifiable', { cwd: projectDir, timeout: 300000 });
+    if (buildResult.indexOf('Error') !== -1) return 'Build failed:\n' + buildResult;
+    var deployResult = sh('anchor deploy', { cwd: projectDir, timeout: 300000 });
+    if (deployResult.indexOf('Error') !== -1) return 'Deploy failed:\n' + deployResult;
+    var verifyResult = sh('anchor verify ' + programId, { cwd: projectDir, timeout: 300000 });
+    return 'Build: OK\nDeploy: OK\nVerify: ' + verifyResult;
+}
+
 // ---- Router ----
 
 async function run(args) {
@@ -353,6 +445,18 @@ async function run(args) {
 
         // Swap
         case 'swap':            return await swap(rest[0], rest[1], rest[2]);
+
+        // Transactions & accounts
+        case 'tx-history':      return txHistory(rest[0], rest[1]);
+        case 'tx-detail':       return txDetail(rest[0]);
+        case 'account-info':    return accountInfo(rest[0]);
+        case 'account-tokens':  return accountTokens(rest[0]);
+
+        // Diagnosis
+        case 'diagnose':        return diagnose(rest.join(' '));
+
+        // Deploy + verify
+        case 'deploy-verify':   return deployVerify(rest[0], rest[1]);
 
         // Program management
         case 'program-show':    return programShow(rest[0]);
@@ -397,6 +501,18 @@ Tokens:
 
 Swap:
   swap <input> <output> <amount>      Jupiter quote
+
+Transactions & Accounts:
+  tx-history <address> [limit]        Recent transaction signatures
+  tx-detail <signature>               Parsed transaction details
+  account-info <address>              Account info (owner, lamports, data)
+  account-tokens <address>            List all SPL tokens for address
+
+Diagnosis:
+  diagnose <error-text>               Lookup common Solana errors with fixes
+
+Deploy + Verify:
+  deploy-verify <program-id> [dir]    Build verifiable + deploy + verify in one step
 
 Program:
   program-show <id>                   Program info
