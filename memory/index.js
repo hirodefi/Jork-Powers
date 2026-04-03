@@ -10,7 +10,7 @@ const NUCLEUS = process.env.JORK_NUCLEUS ||
     path.join(process.cwd(), '.jork');
 
 const config = (() => {
-    try { return require('./CONFIG.json').settings; } catch(e) { return {}; }
+    try { return require('./config.json').settings; } catch(e) { return {}; }
 })();
 
 // Singleton instances (shared when require()'d)

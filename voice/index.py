@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Voice power - transcribe voice messages. Whisper tiny, CPU, minimal."""
-import sys, os, json
+import sys, os, json, re
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
 
@@ -33,7 +33,6 @@ def correct_solana_terms(text):
         for variant in variants:
             if variant in lower:
                 # Case-insensitive replace
-                import re
                 text = re.sub(re.escape(variant), correct, text, flags=re.IGNORECASE)
     return text
 

@@ -86,7 +86,7 @@ token::transfer(CpiContext::new(token_program, Transfer {
 // Transfer out: vault_authority signs via invoke_signed
 token::transfer(CpiContext::new_with_signer(token_program, Transfer {
     from: vault, to: user_token_account, authority: vault_authority
-}, &[&[b"vault-auth", &[bump]]])), amount)?;
+}, &[&[b"vault-auth", &[bump]]]), amount)?;
 ```
 
 ## Staking Pattern

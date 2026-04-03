@@ -104,7 +104,7 @@ function deploy(projectDir) {
 
 function deployMainnet(projectDir) {
     projectDir = projectDir || '.';
-    sh('solana config set --url ' + getRpc());
+    sh('solana config set --url https://api.mainnet-beta.solana.com');
     return sh('anchor deploy', { cwd: projectDir, timeout: 300000 });
 }
 
@@ -322,9 +322,6 @@ function txHistory(address, limit) {
     limit = limit || '10';
     sh('solana config set --url ' + getRpc());
     try {
-        const { Connection, PublicKey } = require('@solana/web3.js');
-        const conn = new Connection(getRpc(), 'confirmed');
-        // Sync wrapper since we need to return from a sync function
         const result = require('child_process').execSync(
             'node -e "const{Connection,PublicKey}=require(\'@solana/web3.js\');' +
             'new Connection(\'' + getRpc() + '\',\'confirmed\')' +
@@ -427,7 +424,7 @@ async function run(args) {
         case 'deploy-mainnet':  return deployMainnet(rest[0]);
         case 'keys':            return keys(rest[0]);
         case 'keys-sync':       return keysSync(rest[0]);
-        case 'idl':             return idl(rest[0], rest.slice(1).join(' '), rest[rest.length-1]);
+        case 'idl':             return idl(rest[0], rest[1] || '', rest[2] || '.');
         case 'verify':          return verify(rest[0], rest[1]);
 
         // Wallet
