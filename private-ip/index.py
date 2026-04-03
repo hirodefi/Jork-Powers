@@ -33,7 +33,7 @@ def rotate():
     try:
         import socket
         s = socket.socket()
-        s.connect(('127.0.0.1', 9501))
+        s.connect(('127.0.0.1', 9051))
         s.sendall(b'AUTHENTICATE ""\r\nNEWNYM\r\n')
         s.close()
         time.sleep(2)

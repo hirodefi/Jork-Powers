@@ -50,7 +50,7 @@ def post_comments(post_url, limit=20):
         'author': c['data'].get('author'),
         'text': c['data'].get('body', '')[:500],
         'score': c['data'].get('score')
-    } for c in comments if c['kind'] == 't1']]
+    } for c in comments if c['kind'] == 't1']
 
 def run(args):
     cmd = args[0] if args else 'help'

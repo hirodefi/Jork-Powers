@@ -19,7 +19,7 @@ import sys,json
 for line in sys.stdin:
     try:
         e = json.loads(line)
-        print('[' + e.get('ts','')[:10] + '] ' + e.get('role','') + ': ' + str(e.get('content',''))[:200])
+        print('[' + str(e.get('ts',''))[:10] + '] ' + e.get('role','') + ': ' + str(e.get('msg',''))[:200])
     except:
         pass
 " || echo "(no matches)"
