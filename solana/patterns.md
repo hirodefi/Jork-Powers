@@ -264,6 +264,62 @@ const expo = priceUpdate.expo;   // negative exponent
 const actualPrice = price * Math.pow(10, expo);
 ```
 
+## Testing (LiteSVM)
+
+Fast in-process Solana VM. Much faster than solana-test-validator.
+
+**Rust:**
+```rust
+// Cargo.toml: litesvm = "0.3"
+use litesvm::LiteSVM;
+let mut svm = LiteSVM::new();
+svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+let tx = Transaction::new_signed_with_payer(&[instruction], Some(&payer.pubkey()), &[&payer], svm.latest_blockhash());
+svm.send_transaction(tx).unwrap();
+```
+
+**TypeScript:**
+```ts
+// npm install litesvm
+import { LiteSVM } from 'litesvm';
+const svm = new LiteSVM();
+svm.airdrop(payer.publicKey, 10_000_000_000n);
+const tx = new Transaction().add(instruction);
+svm.sendTransaction(tx, [payer]);
+```
+
+## Security Checklist (Top 5)
+
+**1. Missing owner checks.** Always verify account.owner matches expected program. Anchor does this with typed `Account<T>` but `UncheckedAccount` skips it.
+
+**2. PDA bump canonicalization.** Always use `find_program_address` (canonical bump 255 down). Store the bump. Don't let users pass arbitrary bumps.
+
+**3. Token-2022: use transfer_checked.** Token-2022 tokens require `transfer_checked` (with decimals) instead of `transfer`. Using plain `transfer` will fail silently or error.
+
+**4. Account closure attacks.** When closing an account with `close = target`, zero the data first. Otherwise the account can be revived with the old data by re-sending rent.
+
+**5. Initialization attacks.** Use `init` constraint, not manual initialization. If using `init_if_needed`, ensure the follow-up logic handles both fresh and existing accounts correctly.
+
+## Token-2022 Extensions
+
+**Transfer fees (0.5%):**
+```bash
+spl-token create-token --program-id TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb \
+  --transfer-fee-basis-points 50 --transfer-fee-maximum-fee 5000
+```
+Must use `transfer_checked_with_fee` instead of `transfer`.
+
+**Permanent delegate (royalties/seizure):**
+```bash
+spl-token create-token --enable-permanent-delegate
+```
+Warning: gives the delegate full control over all token accounts. Use carefully.
+
+**Non-transferable (soulbound):**
+```bash
+spl-token create-token --enable-non-transferable
+```
+
 ## Common Mints
 
 ```

@@ -132,6 +132,7 @@ function idl(subcmd, args, projectDir) {
 // ---- Verify ----
 
 function verify(programId, projectDir) {
+    if (programId) programId = sanitize(programId);
     projectDir = projectDir || '.';
     if (!programId) return 'Usage: verify <program-id>';
     return sh('anchor verify ' + programId, { cwd: projectDir, timeout: 300000 });
@@ -149,6 +150,7 @@ function airdrop(amount) {
 // ---- Balance ----
 
 function balance(address) {
+    if (address) address = sanitize(address);
     sh('solana config set --url ' + getRpc());
     if (address) return sh('solana balance ' + address);
     return sh('solana balance');
@@ -288,12 +290,14 @@ async function swap(inputMint, outputMint, amount) {
 // ---- Program management ----
 
 function programShow(programId) {
+    if (programId) programId = sanitize(programId);
     if (!programId) return 'Usage: program-show <program-id>';
     sh('solana config set --url ' + getRpc());
     return sh('solana program show ' + programId);
 }
 
 function programClose(programId) {
+    if (programId) programId = sanitize(programId);
     if (!programId) return 'Usage: program-close <program-id>';
     if (getCluster() === 'mainnet-beta') return 'SAFETY: Use program-close-mainnet for mainnet.';
     sh('solana config set --url ' + getRpc());
@@ -371,21 +375,53 @@ function accountTokens(address) {
 // ---- Error diagnosis ----
 
 var SOLANA_ERRORS = {
+    // Transaction errors
     'insufficient funds': 'Not enough SOL for transaction fees. Airdrop on devnet: solana airdrop 2. On mainnet: deposit SOL to your wallet.',
     'insufficientfunds': 'Not enough SOL. Check balance with: solana balance',
-    'accountnotfound': 'The account does not exist on-chain. It may not have been created yet or may be on a different cluster.',
-    'programfailedtocomplete': 'The program ran out of compute units or hit a runtime error. Try increasing compute budget or check program logs.',
     'blockhashnotfound': 'Transaction expired. The blockhash was too old. Retry with a fresh blockhash.',
-    'transactionsimulationfailed': 'Transaction simulation failed before sending. Check the instruction data and accounts.',
-    'custom program error': 'An Anchor/program-specific error. Check the error code against your program\'s error enum.',
-    'accountownermismatch': 'The account is owned by a different program than expected. Check the owner field.',
-    'accountdatatooshort': 'Account data is smaller than expected. The account may not be initialized or may use a different schema.',
-    'declaredprogramiddoesnotmatch': 'The program ID in declare_id! does not match the deployed keypair. Run: anchor keys sync',
-    'anchor constraint violated': 'An Anchor constraint check failed (#[account(constraint = ...)]). Check the account relationships.',
-    'seeds constraint was violated': 'PDA derivation failed. Check the seeds, bump, and program ID used in the constraint.',
-    'access violation': 'Memory access violation in BPF. Usually means writing to an account you don\'t own or buffer overflow.',
+    'blockhash not found': 'Blockhash expired (~60-90s). Get a fresh one with getLatestBlockhash() and retry.',
+    'transactionsimulationfailed': 'Transaction simulation failed. Check instruction data, accounts, and program logs.',
+    'transaction too large': 'Transaction exceeds 1232 bytes. Reduce accounts or use Address Lookup Tables (V0 transactions).',
     'compute budget exceeded': 'Ran out of compute units. Add: ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 })',
-    'rent exempt': 'Account must be rent-exempt. Ensure enough lamports for: (data_size + 128) * 3480 * 2',
+
+    // Account errors
+    'accountnotfound': 'Account does not exist on-chain. May not be created yet or on a different cluster.',
+    'accountownermismatch': 'Account owned by a different program than expected. Check the owner field.',
+    'accountdatatooshort': 'Account data smaller than expected. May not be initialized or uses a different schema.',
+    'account already in use': 'Trying to create an account that already exists. Use init_if_needed or check first.',
+    'rent exempt': 'Account must be rent-exempt. Ensure enough lamports: (data_size + 128) * 3480 * 2',
+
+    // Program errors
+    'programfailedtocomplete': 'Program ran out of compute units or hit runtime error. Check program logs.',
+    'custom program error': 'Anchor/program-specific error. Check error code against your program\'s error enum.',
+    'access violation': 'Memory access violation in BPF. Writing to an account you don\'t own or buffer overflow.',
+    'declaredprogramiddoesnotmatch': 'Program ID in declare_id! does not match keypair. Fix: anchor keys sync',
+
+    // Anchor errors
+    'anchor constraint violated': 'Anchor constraint check failed. Check account relationships and constraints.',
+    'seeds constraint was violated': 'PDA derivation failed. Check seeds, bump, and program ID.',
+    'has one constraint violated': 'has_one check failed. The field value does not match the expected account.',
+    'account discriminator mismatch': 'Wrong account type passed. The 8-byte discriminator does not match the expected struct.',
+    'account not initialized': 'Account exists but has no data. Call the initialize instruction first.',
+    'idl parse error': 'IDL is outdated or corrupted. Run: anchor build && anchor idl build',
+
+    // Build/toolchain errors
+    'glibc not found': 'GLIBC version mismatch. Your OS needs a newer libc. Try: apt update && apt upgrade. Or use a newer OS image.',
+    'glibc_2': 'GLIBC version required is newer than installed. Upgrade OS or use Docker/nix for builds.',
+    'edition2024': 'Crate uses Rust edition 2024 which conflicts with Solana tools. Pin the crate: add to Cargo.toml [patch.crates-io] section. Common offenders: blake3, constant_time_eq, base64ct.',
+    'error e0554': 'Feature flag not available in this Rust version. Usually means a dependency needs edition 2024. Pin it or upgrade Rust.',
+    'platform tools': 'Solana platform tools version mismatch. Install the right version: solana-install init <version>',
+    'no such subcommand': 'CLI version mismatch. Check: solana --version, anchor --version. See compatibility table.',
+
+    // Network errors
+    'connection refused': 'Cannot connect to RPC. Check URL, firewall, and that the RPC provider is up.',
+    '429 too many requests': 'RPC rate limited. Switch to a paid RPC (Helius, QuickNode) or reduce request frequency.',
+    'ipv6': 'IPv6 connection issues. Try forcing IPv4: export NODE_OPTIONS="--dns-result-order=ipv4first"',
+
+    // Token errors
+    'token account not found': 'No token account exists for this mint/owner. Create one first or use --fund-recipient on transfer.',
+    'owner does not match': 'Token account owner does not match the signer. Check you are using the right wallet.',
+    'transfer checked': 'Token-2022 requires transfer_checked instead of transfer. Include the decimals parameter.',
 };
 
 function diagnose(errorText) {
@@ -404,6 +440,7 @@ function diagnose(errorText) {
 // ---- Deploy + verify in one step ----
 
 function deployVerify(programId, projectDir) {
+    if (programId) programId = sanitize(programId);
     if (!programId) return 'Usage: deploy-verify <program-id> [dir]';
     projectDir = projectDir || '.';
     sh('solana config set --url ' + getRpc());
