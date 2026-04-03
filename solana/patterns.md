@@ -320,6 +320,38 @@ Warning: gives the delegate full control over all token accounts. Use carefully.
 spl-token create-token --enable-non-transferable
 ```
 
+**On-chain metadata (no Metaplex needed):**
+```bash
+spl-token create-token --program-id TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb --enable-metadata
+spl-token initialize-metadata <MINT> "MyToken" "MTK" "https://example.com/metadata.json"
+spl-token update-metadata <MINT> name "New Name"
+spl-token update-metadata <MINT> custom-field "custom value"
+```
+
+**Transfer hook (custom logic on every transfer):**
+```bash
+spl-token create-token --transfer-hook <HOOK_PROGRAM_ID>
+```
+The hook program receives every transfer as a CPI. Use for royalties, transfer restrictions, compliance.
+
+## Version Compatibility
+
+Use these tested combinations. Wrong versions waste hours debugging.
+
+**New projects (recommended):**
+- Anchor 0.32.1 + Solana CLI 3.x (Agave) + Rust 1.89+ + Platform Tools v1.44+
+
+**Stable/proven:**
+- Anchor 0.30.1 + Solana CLI 1.18.x + Rust 1.79 + Platform Tools v1.41
+
+**If you hit edition2024 errors:**
+Pin the offending crate in Cargo.toml:
+```toml
+[patch.crates-io]
+blake3 = { git = "https://github.com/nickhudkins/blake3", branch = "feat/edition-2021" }
+```
+Common offenders: blake3, constant_time_eq, base64ct, indexmap.
+
 ## Common Mints
 
 ```
