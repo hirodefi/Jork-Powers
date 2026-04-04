@@ -31,6 +31,40 @@ const CONCEPTS = {
     cofounder:      /prefer|like to|usually|my setup|my laptop|my server|i use|deploy to|my framework|my stack|i work on/i,
 };
 
+// Synonym map: expand search queries to catch related terms
+const SYNONYMS = {
+    'wallet':     ['phantom', 'solflare', 'backpack', 'adapter', 'connect wallet', 'keypair'],
+    'token':      ['spl', 'mint', 'token-2022', 'token account', 'supply'],
+    'nft':        ['metaplex', 'collection', 'candy machine', 'bubblegum', 'compressed'],
+    'deploy':     ['deployment', 'vercel', 'mainnet', 'devnet', 'ship', 'launch', 'live'],
+    'swap':       ['jupiter', 'dex', 'exchange', 'trade', 'raydium', 'orca'],
+    'frontend':   ['react', 'nextjs', 'next.js', 'vite', 'ui', 'interface', 'dapp'],
+    'server':     ['nginx', 'ssl', 'domain', 'hosting', 'vps', 'hetzner'],
+    'build':      ['create', 'scaffold', 'make', 'develop', 'implement'],
+    'error':      ['bug', 'fix', 'crash', 'fail', 'broken', 'issue', 'problem'],
+    'staking':    ['stake', 'reward', 'delegate', 'validator', 'epoch'],
+    'lending':    ['borrow', 'collateral', 'liquidation', 'interest', 'loan'],
+    'program':    ['anchor', 'smart contract', 'instruction', 'account', 'pda'],
+    'balance':    ['lamports', 'sol', 'amount', 'funds'],
+    'transaction':['signature', 'blockhash', 'confirm', 'send', 'transfer'],
+};
+
+function expandQuery(tokens) {
+    var expanded = new Set(tokens);
+    for (var i = 0; i < tokens.length; i++) {
+        var syns = SYNONYMS[tokens[i]];
+        if (syns) {
+            for (var j = 0; j < syns.length; j++) {
+                // Only add single-word synonyms to the keyword search
+                if (syns[j].indexOf(' ') === -1) {
+                    expanded.add(syns[j]);
+                }
+            }
+        }
+    }
+    return Array.from(expanded);
+}
+
 function extractKeywords(msg) {
     return [...new Set(
         msg.toLowerCase()
@@ -46,4 +80,4 @@ function classifyConcepts(msg) {
         .map(([name]) => name);
 }
 
-module.exports = { STOPWORDS, CONCEPTS, extractKeywords, classifyConcepts };
+module.exports = { STOPWORDS, CONCEPTS, SYNONYMS, extractKeywords, classifyConcepts, expandQuery };

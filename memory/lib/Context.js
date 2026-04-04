@@ -1,6 +1,6 @@
 'use strict';
 
-const { extractKeywords, classifyConcepts } = require('./Concepts');
+const { extractKeywords, classifyConcepts, expandQuery } = require('./Concepts');
 
 class Context {
     constructor(store, config) {
@@ -55,37 +55,46 @@ class Context {
 
     search(query, limit) {
         limit = parseInt(limit) || 10;
-        const store  = this.store;
+        const store = this.store;
 
-        const tokens = (query || '')
+        const rawTokens = (query || '')
             .toLowerCase()
             .replace(/[^a-z0-9 ]/g, '')
             .split(/\s+/)
             .filter(w => w.length > 2);
 
-        if (tokens.length === 0) return [];
+        if (rawTokens.length === 0) return [];
 
-        // Try intersection first (all tokens must match)
-        let resultIds = null;
+        // Expand with synonyms for broader recall
+        const tokens = expandQuery(rawTokens);
+
+        // Collect all matching message IDs with hit count for scoring
+        const idHits = {};
         for (const token of tokens) {
-            const ids = new Set(store.getByKeyword(token));
-            if (resultIds === null) {
-                resultIds = ids;
-            } else {
-                resultIds = new Set([...resultIds].filter(id => ids.has(id)));
+            const ids = store.getByKeyword(token);
+            for (const id of ids) {
+                idHits[id] = (idHits[id] || 0) + 1;
             }
         }
 
-        // Fallback to union if intersection empty
-        if (!resultIds || resultIds.size === 0) {
-            resultIds = new Set();
-            for (const token of tokens) {
-                store.getByKeyword(token).forEach(id => resultIds.add(id));
-            }
-        }
+        if (Object.keys(idHits).length === 0) return [];
 
-        const sorted = [...resultIds].sort((a, b) => b - a).slice(0, limit);
-        return store.seekMany(sorted);
+        // Score: keyword hits + recency bonus
+        // Higher ID = more recent. Normalize recency to 0-1 range.
+        const maxId = store.offsets.length;
+        const scored = Object.entries(idHits).map(function([id, hits]) {
+            const numId = parseInt(id);
+            const recency = maxId > 0 ? numId / maxId : 0; // 0 = oldest, 1 = newest
+            // Score = keyword hits (weight 2) + recency (weight 1)
+            const score = (hits * 2) + recency;
+            return { id: numId, score: score };
+        });
+
+        // Sort by score descending, take top N
+        scored.sort(function(a, b) { return b.score - a.score; });
+        const topIds = scored.slice(0, limit).map(function(s) { return s.id; });
+
+        return store.seekMany(topIds);
     }
 
     _format(summary, recent, relevant) {
