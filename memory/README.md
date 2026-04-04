@@ -5,9 +5,11 @@ Zero-loss memory for Jork's Telegram conversation. Every message ever written is
 ## What it does
 
 - **Preserves** every message forever in an append-only log
-- **Indexes** keywords and concepts at write-time — lookup only at read-time
-- **Provides** instant context for Jork's think cycle: summary + recent + relevant
-- **Searches** past conversations by keyword with no file scanning
+- **Indexes** keywords and concepts at write-time, lookup only at read-time
+- **Provides** instant context: summary + recent + relevant messages
+- **Searches** with synonym expansion (14 groups: wallet->phantom/adapter/keypair, token->spl/mint/supply, etc.)
+- **Ranks** search results by relevance AND recency (recent relevant beats old exact)
+- **Classifies** messages into 17 concept categories (solana, pda, token, nft, defi, deployment, wallet, frontend, infrastructure, etc.)
 
 No separate daemon. No dependencies. Pure Node.js.
 
@@ -145,13 +147,16 @@ Edit `lib/Concepts.js` to add domain-specific patterns:
 
 ```js
 const CONCEPTS = {
-  radar:         /radar|grpc|pipeline|stream/i,
-  market_making: /market.mak|spread|liquidity/i,
-  // add yours here
+  solana_program: /anchor|program|instruction|declare_id/i,
+  token:          /spl.token|token.2022|mint|token.account/i,
+  wallet:         /wallet|keypair|sign|transfer|balance/i,
+  // 17 concepts total, add yours here
 };
 ```
 
 Concepts are classified at write-time. Zero cost at read-time.
+
+Synonym expansion is defined in `SYNONYMS` map. Searching for "wallet" also searches for phantom, solflare, adapter, keypair, etc.
 
 ## Scale
 

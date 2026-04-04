@@ -4,9 +4,9 @@ Default powers (installed automatically on setup):
 
 | Power | Type | What it does |
 |-------|------|--------------|
-| memory | node | Permanent zero-loss conversation recall, keyword and concept indexed |
-| solana | node | Full Solana toolchain: scaffold, build, test, deploy, wallet, tokens, swaps |
-| web2 | node | Server setup, nginx, SSL, SSH, Vercel/SSH deploy, PM2, MongoDB, REST APIs, firewall |
+| memory | node | Conversation recall with keyword indexing, concept classification, synonym expansion, recency-weighted search |
+| solana | node | Full Solana toolchain: scaffold, build, test, deploy, wallet, tokens, tx-history, diagnose, deploy-verify, swaps |
+| web2 | node | Server setup: nginx (proxy, SPA, API+frontend), SSL, SSH, Vercel/SSH deploy, PM2, MongoDB, deploy checklist, firewall |
 | voice | python | Transcribe voice messages (Whisper tiny, Solana term correction) |
 | image | node | Read and analyze images via AI vision |
 
