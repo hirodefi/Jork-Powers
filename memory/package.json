@@ -1,5 +1,8 @@
 {
-  "name": "jork-memory-power",
+  "name": "jork-memory",
   "version": "2.0.0",
-  "type": "commonjs"
+  "main": "index.js",
+  "dependencies": {
+    "better-sqlite3": "^12.9.0"
+  }
 }

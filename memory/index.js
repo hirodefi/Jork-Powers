@@ -1,136 +1,122 @@
 'use strict';
 
-const path = require('path');
-const Store    = require('./lib/Store');
-const Appender = require('./lib/Appender');
-const Context  = require('./lib/Context');
+var Database = require('better-sqlite3');
+var path = require('path');
+var fs = require('fs');
+var stopwords = require('./stopwords');
 
-const NUCLEUS = process.env.JORK_NUCLEUS ||
-    (process.env.JORK_WORKSPACE ? path.join(process.env.JORK_WORKSPACE, '.jork') : null) ||
-    path.join(process.cwd(), '.jork');
+var DB_PATH = path.join(__dirname, '..', '..', '.jork', 'memory', 'memory.db');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
-const config = (() => {
-    try { return require('./config.json').settings; } catch(e) { return {}; }
-})();
+var db = new Database(DB_PATH);
 
-// Singleton instances (shared when require()'d)
-const store    = new Store(NUCLEUS);
-const appender = new Appender(store, NUCLEUS, config);
-const ctx      = new Context(store, config);
+db.exec(
+  'CREATE TABLE IF NOT EXISTS messages (' +
+  'id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+  'ts TEXT NOT NULL, ' +
+  'role TEXT NOT NULL, ' +
+  'content TEXT NOT NULL, ' +
+  'keywords TEXT' +
+  ');' +
+  'CREATE INDEX IF NOT EXISTS idx_ts ON messages(ts);'
+);
 
-store.load();
+var insert = db.prepare(
+  'INSERT INTO messages (ts, role, content, keywords) VALUES (?, ?, ?, ?)'
+);
+var recent = db.prepare(
+  'SELECT id, role, content, ts FROM messages ORDER BY id DESC LIMIT ?'
+);
+var search = db.prepare(
+  'SELECT id, role, content, ts FROM messages WHERE keywords LIKE ? OR content LIKE ? ORDER BY id DESC LIMIT ?'
+);
 
-// ---- Module API (used when require()'d by jork.js) ----
-
-module.exports = {
-    context: ()          => ctx.build(),
-    query:   (q, limit)  => ctx.search(q, limit),
-    append:  (role, msg) => appender.write(role, msg),
-    status:  ()          => store.status(),
-    rebuild: ()          => { store.close(); store.rebuild(); store.load(); },
-    close:   ()          => { appender.close(); store.close(); },
-};
-
-// ---- CLI (only runs when executed directly) ----
-
-if (require.main === module) {
-    const args       = process.argv.slice(2);
-    const cmd        = args[0];
-    const options    = {};
-    const positional = [];
-
-    for (let i = 1; i < args.length; i++) {
-        if (args[i].startsWith('--')) {
-            const key = args[i].slice(2);
-            const val = args[i + 1] && !args[i + 1].startsWith('--') ? args[++i] : true;
-            options[key] = val;
-        } else {
-            positional.push(args[i]);
-        }
-    }
-
-    switch (cmd) {
-
-        case 'context':
-            console.log(ctx.build());
-            break;
-
-        case 'query': {
-            const q = positional.join(' ') || options.q;
-            if (!q) { console.error('Usage: index.js query <query text>'); process.exit(1); }
-            const results = ctx.search(q, options.limit);
-            if (results.length === 0) {
-                console.log('No results found.');
-            } else {
-                console.log(`Found ${results.length} result(s):\n`);
-                results.forEach((m, i) => console.log(`${i + 1}. [${m.id}] ${m.role}: ${m.msg}`));
-            }
-            break;
-        }
-
-        case 'append': {
-            const role = options.role || positional[0];
-            const msg  = options.msg  || positional[1];
-            if (!role || !msg) {
-                console.error('Usage: index.js append --role <role> --msg <msg>');
-                process.exit(1);
-            }
-            const id = appender.write(role, msg);
-            console.log(`Appended message id=${id}`);
-            appender.close();
-            break;
-        }
-
-        case 'status': {
-            const s = store.status();
-            console.log('\nJork Memory Status\n');
-            console.log(`Messages:  ${s.messages}`);
-            console.log(`Keywords:  ${s.keywords}`);
-            console.log(`Concepts:  ${s.concepts}`);
-            console.log(`History:   ${s.historyMB} MB`);
-            console.log(`Summary:   ${s.summary}`);
-            console.log('');
-            break;
-        }
-
-        case 'check': {
-            const s = require('fs').existsSync(path.join(NUCLEUS, 'history.jsonl'))
-                ? require('fs').statSync(path.join(NUCLEUS, 'history.jsonl'))
-                : { size: 0 };
-            console.log(JSON.stringify({
-                messages:        store.status().messages,
-                estimatedTokens: Math.ceil(s.size / 4),
-                keywords:        store.status().keywords,
-                concepts:        store.status().concepts,
-            }));
-            break;
-        }
-
-        case 'rebuild':
-            store.close();
-            store.rebuild();
-            console.log('Rebuild complete.');
-            break;
-
-        default:
-            console.log(`
-Jork Memory Power
-
-Commands:
-  context              Build think-cycle context (summary + recent + relevant)
-  query <text>         Search memory by keyword
-  append --role <r> --msg <m>   Append a message
-  status               Show memory stats
-  check                Quick JSON stats
-  rebuild              Rebuild full index from history.jsonl
-
-Environment:
-  JORK_NUCLEUS         Path to .jork directory (default: ./.jork)
-  JORK_WORKSPACE       Alternative: path to workspace (uses workspace/.jork)
-`);
-            break;
-    }
-
-    appender.close();
-    store.close();
+function extractKeywords(text) {
+  if (!text) return '';
+  var words = text.toLowerCase().split(/\W+/);
+  return words
+    .filter(function(w) { return w.length > 4 && stopwords.indexOf(w) === -1; })
+    .join(' ');
 }
+
+function append(role, content) {
+  var capped = (content || '').slice(0, 2000);
+  var kw = extractKeywords(capped);
+  var ts = new Date().toISOString();
+  insert.run(ts, role, capped, kw);
+}
+
+function context() {
+  var rows = recent.all(20);
+  if (!rows || rows.length === 0) return '';
+  return rows
+    .reverse()
+    .map(function(r) {
+      return '[' + r.role + '] ' + (r.content || '').slice(0, 200);
+    })
+    .join('\n');
+}
+
+function countMatches(row, words) {
+  var combined = ((row.keywords || '') + ' ' + (row.content || '')).toLowerCase();
+  var count = 0;
+  for (var i = 0; i < words.length; i++) {
+    if (combined.indexOf(words[i]) !== -1) count++;
+  }
+  return count;
+}
+
+function query(text, n) {
+  if (!text || !n) return [];
+
+  var words = text.toLowerCase().split(/\W+/)
+    .filter(function(w) { return w.length > 2 && stopwords.indexOf(w) === -1; });
+
+  if (words.length === 0) {
+    var fb = recent.all(n || 5);
+    return (fb || []).map(function(r) {
+      return { role: r.role, msg: r.content, ts: r.ts };
+    });
+  }
+
+  var seen = {};
+  var candidates = [];
+
+  for (var i = 0; i < words.length; i++) {
+    var pattern = '%' + words[i] + '%';
+    var rows = search.all(pattern, pattern, n * 3);
+    if (!rows) continue;
+    for (var j = 0; j < rows.length; j++) {
+      var r = rows[j];
+      if (!seen[r.id]) {
+        seen[r.id] = true;
+        candidates.push(r);
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    var fallback = recent.all(5);
+    if (fallback) {
+      for (var k = 0; k < fallback.length; k++) {
+        if (!seen[fallback[k].id]) {
+          seen[fallback[k].id] = true;
+          candidates.push(fallback[k]);
+        }
+      }
+    }
+  }
+
+  candidates.forEach(function(c) { c._score = countMatches(c, words); });
+  candidates.sort(function(a, b) { return b._score - a._score || b.id - a.id; });
+
+  return candidates.slice(0, n).map(function(r) {
+    return { role: r.role, msg: r.content, ts: r.ts };
+  });
+}
+
+function close() {
+  db.close();
+}
+
+module.exports = { append: append, context: context, query: query, close: close };
