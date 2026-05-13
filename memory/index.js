@@ -47,14 +47,15 @@ function append(role, content) {
 }
 
 function context() {
-  var rows = recent.all(20);
+  var rows = recent.all(30);
   if (!rows || rows.length === 0) return '';
-  return rows
-    .reverse()
-    .map(function(r) {
-      return '[' + r.role + '] ' + (r.content || '').slice(0, 200);
-    })
-    .join('\n');
+  var reversed = rows.reverse();
+  // Give more chars to recent messages, taper for older ones
+  var total = reversed.length;
+  return reversed.map(function(r, i) {
+    var limit = i >= total - 5 ? 800 : i >= total - 15 ? 400 : 200;
+    return '[' + r.role + '] ' + (r.content || '').slice(0, limit);
+  }).join('\n');
 }
 
 function countMatches(row, words) {
@@ -75,7 +76,7 @@ function query(text, n) {
   if (words.length === 0) {
     var fb = recent.all(n || 5);
     return (fb || []).map(function(r) {
-      return { role: r.role, msg: r.content, ts: r.ts };
+      return { role: r.role, msg: (r.content || '').slice(0, 500), ts: r.ts };
     });
   }
 
@@ -111,7 +112,7 @@ function query(text, n) {
   candidates.sort(function(a, b) { return b._score - a._score || b.id - a.id; });
 
   return candidates.slice(0, n).map(function(r) {
-    return { role: r.role, msg: r.content, ts: r.ts };
+    return { role: r.role, msg: (r.content || '').slice(0, 500), ts: r.ts };
   });
 }
 
